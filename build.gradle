@@ -30,3 +30,8 @@ tasks.withType(JavaCompile) {
 
 group = "so.jscinoz.wurmunlimited.mods"
 version = "0.0.1"
+
+jar {
+  baseName = "brandmod"
+  version = null
+}
