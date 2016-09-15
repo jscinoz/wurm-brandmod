@@ -14,9 +14,23 @@ repositories {
   }
 }
 
+configurations {
+  jarLib {
+    description = "Dependencies to be included in the mod JAR"
+
+    // Include everything from the runtime config...
+    extendsFrom runtime
+
+    // ... except the mod launcher (& dependencies) itself
+    exclude group: "org.gotti.wurmunlimited"
+  }
+}
+
 dependencies {
   compile group: "org.gotti.wurmunlimited", name: "server-modlauncher",
           version: "0.20"
+
+  compile group: "org.apache.bcel", name: "bcel", version: "6.0"
 }
 
 tasks.withType(JavaCompile) {
@@ -25,6 +39,8 @@ tasks.withType(JavaCompile) {
     "-Xlint:all" <<
     "-Xlint:-processing" <<
     "-Xlint:-options" <<
+    // Needed for Javassist
+    "-Xlint:-classfile" <<
     "-Xdiags:verbose"
 }
 
@@ -34,4 +50,22 @@ version = "0.0.1"
 jar {
   baseName = "brandmod"
   version = null
+
+  // XXX: Figure out how to make this work. bcel still isn't found even with the
+  // jar included
+  /*
+  manifest {
+    attributes(
+      "Class-Path": configurations.jarLib.collect { it.getName() }.join(" ")
+    )
+  }
+
+  into("lib") {
+    from {
+      configurations.jarLib.each {
+        println it
+      }
+    }
+  }
+  */
 }
