@@ -1,6 +1,6 @@
 apply plugin: "java"
 
-defaultTasks "build"
+defaultTasks "dist"
 
 sourceCompatibility = JavaVersion.VERSION_1_8
 targetCompatibility = JavaVersion.VERSION_1_8
@@ -14,24 +14,27 @@ repositories {
   }
 }
 
-configurations {
-  jarLib {
-    description = "Dependencies to be included in the mod JAR"
-
-    // Include everything from the runtime config...
-    extendsFrom runtime
-
-    // ... except the mod launcher (& dependencies) itself
-    exclude group: "org.gotti.wurmunlimited"
-  }
-}
-
 dependencies {
   // Also pulls in the specific version of javassist that will be available at
   // runtime
   compile group: "org.gotti.wurmunlimited", name: "server-modlauncher",
           version: "0.20"
+}
 
+task dist(type: Zip) {
+  archiveName = "brandmod.zip"
+
+  dependsOn "jar"
+
+  into("brandmod") {
+    from {
+      file jar.archivePath
+    }
+  }
+
+  from {
+    file "src/brandmod.properties"
+  }
 }
 
 tasks.withType(JavaCompile) {
@@ -51,22 +54,4 @@ version = "0.0.1"
 jar {
   baseName = "brandmod"
   version = null
-
-  // XXX: Figure out how to make this work. bcel still isn't found even with the
-  // jar included
-  /*
-  manifest {
-    attributes(
-      "Class-Path": configurations.jarLib.collect { it.getName() }.join(" ")
-    )
-  }
-
-  into("lib") {
-    from {
-      configurations.jarLib.each {
-        println it
-      }
-    }
-  }
-  */
 }
