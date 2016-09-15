@@ -8,6 +8,15 @@ targetCompatibility = JavaVersion.VERSION_1_8
 repositories {
   mavenCentral()
   jcenter()
+
+  maven {
+    url "http://gotti.no-ip.org/maven/repository"
+  }
+}
+
+dependencies {
+  compile group: "org.gotti.wurmunlimited", name: "server-modlauncher",
+          version: "0.20"
 }
 
 tasks.withType(JavaCompile) {
