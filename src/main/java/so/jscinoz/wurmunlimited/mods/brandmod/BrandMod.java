@@ -51,7 +51,11 @@ public class BrandMod implements WurmServerMod, PreInitable {
 
   private void stripPvpCheck(ClassPool pool, CtMethod method)
       throws BadBytecode, CannotCompileException {
-    MethodInfo mi = method.getMethodInfo();
+    String fqMethodName = String.format(
+      "%s.%s", method.getDeclaringClass().getName(), method.getName());
+
+    logger.log(INFO, String.format(
+      "Stripping PVP check from %s", fqMethodName));
 
     method.instrument(new ExprEditor() {
       public void edit(MethodCall m) throws CannotCompileException {
@@ -63,23 +67,16 @@ public class BrandMod implements WurmServerMod, PreInitable {
       }
     });
 
-    mi.rebuildStackMap(pool);
+    logger.log(INFO, String.format(
+      "Successfully stripped PVP check from %s", fqMethodName));
   }
 
-  private void mangleBrandClass(ClassPool pool)
+  private void mangleClassMethods(
+      ClassPool pool, String className, String[] methodNames)
       throws BadBytecode, CannotCompileException, NotFoundException {
-    CtClass targetClass = pool.get(BRAND_CLASS_NAME);
+    logger.log(INFO, String.format("Mangling %s", className));
 
-    CtMethod targetMethod =
-      findMatchingMethod(targetClass, "addInitialPermissions");
-
-    stripPvpCheck(pool, targetMethod);
-  }
-
-  private void mangleManageMenuClass(ClassPool pool)
-      throws BadBytecode, CannotCompileException, NotFoundException {
-    CtClass targetClass = pool.get(MANAGE_MENU_CLASS_NAME);
-    String[] methodNames = { "getBehavioursFor", "action" };
+    CtClass targetClass = pool.get(className);
 
     for (String methodName : methodNames) {
       CtMethod targetMethod =
@@ -87,16 +84,14 @@ public class BrandMod implements WurmServerMod, PreInitable {
 
       stripPvpCheck(pool, targetMethod);
     }
+
+    logger.log(INFO, String.format("Successfully mangled %s", className));
   }
 
-  private void mangleCreaturesClass(ClassPool pool)
+  private void mangleClassMethods(
+      ClassPool pool, String className, String methodName)
       throws BadBytecode, CannotCompileException, NotFoundException {
-    CtClass targetClass = pool.get(CREATURES_CLASS_NAME);
-
-    CtMethod targetMethod =
-      findMatchingMethod(targetClass, "getManagedAnimalsFor");
-
-    stripPvpCheck(pool, targetMethod);
+    mangleClassMethods(pool, className, new String[] { methodName });
   }
 
   @Override
@@ -104,9 +99,16 @@ public class BrandMod implements WurmServerMod, PreInitable {
     ClassPool pool = HookManager.getInstance().getClassPool();
 
     try {
-      mangleBrandClass(pool);
-      mangleManageMenuClass(pool);
-      mangleCreaturesClass(pool);
+      logger.log(INFO, "Enabling PVP server animal permission management");
+
+      mangleClassMethods(pool, BRAND_CLASS_NAME, "addInitialPermissions");
+      mangleClassMethods(pool, CREATURES_CLASS_NAME, "getManagedAnimalsFor");
+      mangleClassMethods(pool, MANAGE_MENU_CLASS_NAME, new String[] {
+        "getBehavioursFor", "action"
+      });
+
+      logger.log(
+        INFO, "Successfully enabled PVP server animal permission management");
     } catch (Exception e) {
       // TODO: Handle properly
       throw new HookException(e);
