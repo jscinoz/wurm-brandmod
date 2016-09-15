@@ -1,0 +1,3 @@
+[submodule "lib/modloader"]
+	path = lib/modloader
+	url = https://github.com/ago1024/WurmServerModLauncher.git

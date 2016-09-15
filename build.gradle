@@ -1,0 +1,23 @@
+apply plugin: "java"
+
+defaultTasks "build"
+
+sourceCompatibility = JavaVersion.VERSION_1_8
+targetCompatibility = JavaVersion.VERSION_1_8
+
+repositories {
+  mavenCentral()
+  jcenter()
+}
+
+tasks.withType(JavaCompile) {
+  options.compilerArgs <<
+    "-Werror" <<
+    "-Xlint:all" <<
+    "-Xlint:-processing" <<
+    "-Xlint:-options" <<
+    "-Xdiags:verbose"
+}
+
+group = "so.jscinoz"
+version = "0.0.1"
