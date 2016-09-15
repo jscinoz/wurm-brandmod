@@ -1,151 +1,115 @@
 package so.jscinoz.wurmunlimited.mods.brandmod;
 
 import java.util.NoSuchElementException;
+import java.util.logging.Logger;
 
 import org.gotti.wurmunlimited.modloader.classhooks.HookManager;
 import org.gotti.wurmunlimited.modloader.classhooks.HookException;
 import org.gotti.wurmunlimited.modloader.interfaces.WurmServerMod;
 import org.gotti.wurmunlimited.modloader.interfaces.PreInitable;
 
-import javassist.ByteArrayClassPath;
 import javassist.ClassPool;
 import javassist.CtClass;
 import javassist.CtMethod;
+import javassist.CannotCompileException;
+import javassist.NotFoundException;
+import javassist.bytecode.MethodInfo;
+import javassist.bytecode.BadBytecode;
+import javassist.expr.ExprEditor;
+import javassist.expr.MethodCall;
 
-import org.apache.bcel.Repository;
-import org.apache.bcel.classfile.JavaClass;
-import org.apache.bcel.classfile.Method;
-import org.apache.bcel.generic.ClassGen;
-import org.apache.bcel.generic.MethodGen;
-import org.apache.bcel.generic.ConstantPoolGen;
-import org.apache.bcel.generic.Instruction;
-import org.apache.bcel.generic.InstructionHandle;
-import org.apache.bcel.generic.InstructionList;
-import org.apache.bcel.generic.INVOKESTATIC;
-import org.apache.bcel.generic.ICONST;
-import org.apache.bcel.generic.GETSTATIC;
-import org.apache.bcel.generic.LDC;
-import org.apache.bcel.generic.INVOKEVIRTUAL;
-import org.apache.bcel.util.ClassPath.ClassFile;
+import static java.util.logging.Level.INFO;
 
 public class BrandMod implements WurmServerMod, PreInitable {
   private static final String BRAND_CLASS_NAME =
     "com.wurmonline.server.creatures.Brand";
 
+  private static final String MANAGE_MENU_CLASS_NAME =
+    "com.wurmonline.server.behaviours.ManageMenu";
+
+  private static final String CREATURES_CLASS_NAME =
+    "com.wurmonline.server.creatures.Creatures";
+
   private static final String SERVERS_CLASS_NAME =
     "com.wurmonline.server.Servers";
 
-  private InstructionHandle findPvpCheck(
-      InstructionList il, ConstantPoolGen cpGen) {
-    for (InstructionHandle ih : il) {
-      Instruction i = ih.getInstruction(); 
+  private static final String PVP_CHECK_METHOD_NAME = "isThisAPvpServer";
 
-      if (i instanceof INVOKESTATIC) {
-        INVOKESTATIC target = (INVOKESTATIC) i;
+  private static final Logger logger =
+    Logger.getLogger(BrandMod.class.getName());
 
-        String className = target.getClassName(cpGen);
-        String methodName = target.getMethodName(cpGen);
+  private CtMethod findMatchingMethod(CtClass targetClass, String methodName) {
+    for (CtMethod m : targetClass.getDeclaredMethods()) {
+      if (m.getName().equals(methodName)) {
+        return m;
+      }
+    }
 
-        System.err.println(className);
+    throw new NoSuchElementException(String.format(
+      "Could not find method %s on %s", methodName, targetClass.getName()));
+  }
 
-        if (className.equals(SERVERS_CLASS_NAME) &&
-            methodName.equals("isThisAPvpServer")) {
-          return ih;
+  private void stripPvpCheck(ClassPool pool, CtMethod method)
+      throws BadBytecode, CannotCompileException {
+    MethodInfo mi = method.getMethodInfo();
+
+    method.instrument(new ExprEditor() {
+      public void edit(MethodCall m) throws CannotCompileException {
+        if (m.getMethodName().equals(PVP_CHECK_METHOD_NAME) &&
+            m.getClassName().equals(SERVERS_CLASS_NAME)) {
+          // Replace call to Servers.isThisAPvpServer with literal false
+          m.replace("$_ = false;");
         }
       }
-    }
+    });
 
-    throw new NoSuchElementException("Could not find target instruction");
+    mi.rebuildStackMap(pool);
   }
 
-  private CtMethod findTargetMethod(CtClass injectedClass) {
-    for (CtMethod m : injectedClass.getMethods()) {
-      System.err.println(m.getName());
-      if (m.getName().equals("addInitialPermissions")) {
-        return m;
-      }
-    }
+  private void mangleBrandClass(ClassPool pool)
+      throws BadBytecode, CannotCompileException, NotFoundException {
+    CtClass targetClass = pool.get(BRAND_CLASS_NAME);
 
-    throw new NoSuchElementException("Could not find target method");
+    CtMethod targetMethod =
+      findMatchingMethod(targetClass, "addInitialPermissions");
+
+    stripPvpCheck(pool, targetMethod);
   }
 
-  private Method findTargetMethod(JavaClass brandClass) {
-    for (Method m : brandClass.getMethods()) {
-      if (m.getName().equals("addInitialPermissions")) {
-        return m;
-      }
-    }
+  private void mangleManageMenuClass(ClassPool pool)
+      throws BadBytecode, CannotCompileException, NotFoundException {
+    CtClass targetClass = pool.get(MANAGE_MENU_CLASS_NAME);
+    String[] methodNames = { "getBehavioursFor", "action" };
 
-    throw new NoSuchElementException("Could not find target method");
+    for (String methodName : methodNames) {
+      CtMethod targetMethod =
+        findMatchingMethod(targetClass, methodName);
+
+      stripPvpCheck(pool, targetMethod);
+    }
   }
 
-  // TODO: Refactor to use javassist alone
+  private void mangleCreaturesClass(ClassPool pool)
+      throws BadBytecode, CannotCompileException, NotFoundException {
+    CtClass targetClass = pool.get(CREATURES_CLASS_NAME);
+
+    CtMethod targetMethod =
+      findMatchingMethod(targetClass, "getManagedAnimalsFor");
+
+    stripPvpCheck(pool, targetMethod);
+  }
+
+  @Override
   public void preInit() {
+    ClassPool pool = HookManager.getInstance().getClassPool();
+
     try {
-      JavaClass brandClass = Repository.lookupClass(BRAND_CLASS_NAME);
-      ClassGen cgen = new ClassGen(brandClass);
-      ConstantPoolGen cpGen = cgen.getConstantPool();
-
-      Method targetMethod = findTargetMethod(brandClass);
-      MethodGen mgen = new MethodGen(targetMethod, BRAND_CLASS_NAME, cpGen);
-      InstructionList il = mgen.getInstructionList();
-
-      // Find the instruction where Servers.isThisAPvpServer is called
-      InstructionHandle target = findPvpCheck(il, cpGen);
-      
-      // Replacement instruction that just pushes a zero onto the stack (i.e. so
-      // we can pretend Servers.isThisAPvpServer always returns false
-      Instruction replacement = new ICONST(0);
-
-      // Replace the instruction at the target position with our replacement
-      target.setInstruction(replacement);
-
-      // XXX: I don't think we need this
-      // il.update();
-
-      InstructionList logging = new InstructionList();
-      Instruction i1 = new GETSTATIC(cgen.getConstantPool().addFieldref("java/lang/System", "out", "Ljava/io/PrintStream;"));
-      Instruction i2 = new LDC(cgen.getConstantPool().addString("XXX: TEST DEBUG"));
-      Instruction i3 = new INVOKEVIRTUAL(cgen.getConstantPool().addMethodref("java/io/PrintStream", "println", "(Ljava/lang/String;)V"));
-      logging.append(i1);
-      logging.append(i2);
-      logging.append(i3);
-
-      //il.insert(logging);
-      
-      mgen.setMaxStack();
-      mgen.setMaxLocals();
-      // XXX: needed?
-      mgen.update();
-
-      // Let's have a look at the updated InstructionList
-      for (InstructionHandle ih : il) {
-        System.err.println(ih);
-      }
-
-      // Replace the original method with our modified one
-      cgen.replaceMethod(targetMethod, mgen.getMethod());
-
-      // Release the instruction handles
-      il.dispose();
-
-      //ClassFile origClassFile = Repository.lookupClassFile(origClass.getName());
-      byte[] classData = cgen.getJavaClass().getBytes();
-
-      // Inject our modified class
-      //cgen.getJavaClass().dump(origClassFile.getPath());
-
-      ClassPool cp = HookManager.getInstance().getClassPool();
-
-      cp.insertClassPath(new ByteArrayClassPath(BRAND_CLASS_NAME, classData));
-
-      CtClass injected = cp.get(BRAND_CLASS_NAME);
-      CtMethod ctm = findTargetMethod(injected);
-    } catch (Throwable t) {
+      mangleBrandClass(pool);
+      mangleManageMenuClass(pool);
+      mangleCreaturesClass(pool);
+    } catch (Exception e) {
       // TODO: Handle properly
-      t.printStackTrace();
-
-      throw new HookException(t);
+      throw new HookException(e);
     }
   }
 }

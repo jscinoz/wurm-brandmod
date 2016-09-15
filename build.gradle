@@ -27,10 +27,11 @@ configurations {
 }
 
 dependencies {
+  // Also pulls in the specific version of javassist that will be available at
+  // runtime
   compile group: "org.gotti.wurmunlimited", name: "server-modlauncher",
           version: "0.20"
 
-  compile group: "org.apache.bcel", name: "bcel", version: "6.0"
 }
 
 tasks.withType(JavaCompile) {
