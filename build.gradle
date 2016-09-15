@@ -28,5 +28,5 @@ tasks.withType(JavaCompile) {
     "-Xdiags:verbose"
 }
 
-group = "so.jscinoz"
+group = "so.jscinoz.wurmunlimited.mods"
 version = "0.0.1"
