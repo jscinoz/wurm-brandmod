@@ -54,4 +54,10 @@ version = "0.0.1"
 jar {
   baseName = "brandmod"
   version = null
+
+  manifest {
+    attributes(
+      "Implementation-Version": project.version
+    )
+  }
 }
