@@ -1,7 +1,12 @@
 package so.jscinoz.wurmunlimited.mods.brandmod;
 
+import java.lang.FunctionalInterface;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.NoSuchElementException;
 import java.util.logging.Logger;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.gotti.wurmunlimited.modloader.classhooks.HookManager;
 import org.gotti.wurmunlimited.modloader.classhooks.HookException;
@@ -22,8 +27,11 @@ import javassist.expr.ExprEditor;
 import javassist.expr.MethodCall;
 
 import static java.util.logging.Level.INFO;
-import static javassist.bytecode.Opcode.INVOKESTATIC;
+import static javassist.bytecode.Opcode.ALOAD;
+import static javassist.bytecode.Opcode.IFNE;
 import static javassist.bytecode.Opcode.LOOKUPSWITCH;
+import static javassist.bytecode.Opcode.INVOKESTATIC;
+import static javassist.bytecode.Opcode.INVOKEVIRTUAL;
 import static javassist.bytecode.Opcode.SIPUSH;
 
 public class BrandMod implements WurmServerMod, PreInitable {
@@ -42,12 +50,21 @@ public class BrandMod implements WurmServerMod, PreInitable {
   private static final String CREATURE_BEHAVIOUR_CLASS_NAME =
     "com.wurmonline.server.behaviours.CreatureBehaviour";
 
+  private static final String COMMUNICATOR_CLASS_NAME =
+    "com.wurmonline.server.creatures.Communicator";
+
   private static final String SERVERS_CLASS_NAME =
     "com.wurmonline.server.Servers";
 
   private static final String PVP_CHECK_METHOD_NAME = "isThisAPvpServer";
 
-  private static final Predicate DEFAULT_PREDICATE = new DefaultPredicate();
+  private static final String BRAND_CHECK_METHOD_NAME = "isBranded";
+
+  private static final Predicate<MethodCall> DEFAULT_PREDICATE =
+    new DefaultPredicate();
+
+  private static final LookaheadPredicate DEFAULT_LOOKAHEAD_PREDICATE =
+    (op, method) -> true;
 
   private static final Logger logger =
     Logger.getLogger(BrandMod.class.getName());
@@ -65,15 +82,82 @@ public class BrandMod implements WurmServerMod, PreInitable {
 
   private int searchForInstruction(CtMethod method, Searcher searcher)
       throws NotFoundException, BadBytecode {
+    return searchForInstructions(method, searcher).get(0);
+  }
+
+  private List<Integer> searchForInstructions(CtMethod method, Searcher searcher)
+      throws NotFoundException, BadBytecode {
     MethodInfo mi = method.getMethodInfo();
     ConstPool cp = mi.getConstPool();
     CodeAttribute ca = mi.getCodeAttribute();
     CodeIterator ci = ca.iterator();
 
-    return searcher.search(ci, cp);
+    List<Integer> result = new ArrayList<>();
+
+    while (ci.hasNext()) {
+      try {
+        int targetPos = searcher.search(ci, cp);
+
+        result.add(targetPos);
+
+      } catch (NotFoundException e) {
+        break;
+      }
+    }
+
+    if (result.size() == 0) {
+      throw new NotFoundException("No matching instructions found");
+    }
+
+    return result;
   }
 
-  private void stripPvpCheck(ClassPool pool, CtMethod method, final Predicate p)
+  private int findSequence(
+      CodeIterator ci, ConstPool cp,
+      List<LookaheadPredicate> predicates)
+      throws NotFoundException, BadBytecode {
+    int pos;
+
+    final int maxIndex = predicates.size() - 1;
+    int testIndex = 0;
+
+    int seqStart = -1;;
+
+    while (ci.hasNext()) {
+      pos = ci.next();
+      int op = ci.byteAt(pos);
+
+      String methodName = (op == INVOKESTATIC || op == INVOKEVIRTUAL)
+        ? cp.getMethodrefName(ci.s16bitAt(pos + 1))
+        : null;
+
+      LookaheadPredicate p = predicates.get(testIndex);
+
+      if (p == null) {
+        p =  DEFAULT_LOOKAHEAD_PREDICATE;
+      }
+
+      if (p.test(op, methodName)) {
+        if (seqStart == -1 || testIndex == 0) {
+          seqStart = pos;
+        }
+
+        if (maxIndex == testIndex) {
+          return seqStart;
+        }
+
+        testIndex++;
+      } else {
+        testIndex = 0;
+      }
+    }
+
+    throw new NotFoundException("No matching bytecode sequence found");
+  }
+
+  private void stripPvpCheck(
+      ClassPool pool, CtMethod method,
+      int expectedPatches, final Predicate<MethodCall> p)
       throws NotFoundException, BadBytecode, CannotCompileException {
     String fqMethodName = String.format(
       "%s.%s", method.getDeclaringClass().getName(), method.getName());
@@ -90,22 +174,37 @@ public class BrandMod implements WurmServerMod, PreInitable {
           // Replace call to Servers.isThisAPvpServer with literal false
           m.replace("$_ = false;");
 
-          check.setPatched();
+          check.didPatch();
         }
       }
     });
 
-    if (!check.didPatch()) {
-      throw new NotFoundException("Did not find target method during patching");
+    int patchCount = check.getPatchCount();
+
+    if (patchCount != expectedPatches) {
+      throw new NotFoundException(String.format(
+        "Only %d patches were done, expected %d", patchCount, expectedPatches));
     }
 
     logger.log(INFO, String.format(
       "Successfully stripped PVP check from %s", fqMethodName));
   }
 
+  private void stripPvpCheck(
+      ClassPool pool, CtMethod method, Predicate<MethodCall> p)
+      throws NotFoundException, BadBytecode, CannotCompileException {
+    stripPvpCheck(pool, method, 1, p);
+  }
+
+  private void stripPvpCheck(
+      ClassPool pool, CtMethod method, int expectedPatches)
+      throws NotFoundException, BadBytecode, CannotCompileException {
+    stripPvpCheck(pool, method, expectedPatches, DEFAULT_PREDICATE);
+  }
+
   private void stripPvpCheck(ClassPool pool, CtMethod method)
       throws NotFoundException, BadBytecode, CannotCompileException {
-    stripPvpCheck(pool, method, DEFAULT_PREDICATE);
+    stripPvpCheck(pool, method, 1, DEFAULT_PREDICATE);
   }
 
   private void mangleClassMethods(
@@ -267,6 +366,52 @@ public class BrandMod implements WurmServerMod, PreInitable {
     mangleCBAction(pool, targetClass);
   }
 
+  private void mangleCommunicator(ClassPool pool)
+      throws BadBytecode, CannotCompileException, NotFoundException {
+    CtClass targetClass = pool.get(COMMUNICATOR_CLASS_NAME);
+    CtMethod targetMethod =
+      targetClass.getDeclaredMethods("reallyHandle_CMD_MOVE_INVENTORY")[0];
+
+    final List<LookaheadPredicate> sequence = Arrays.asList(
+      (op, methodName) ->
+        op == INVOKESTATIC && methodName.equals(PVP_CHECK_METHOD_NAME),
+      (op, methodName) ->
+        op == IFNE,
+      (op, methodName) ->
+        op == ALOAD,
+      (op, methodName) ->
+        op == INVOKEVIRTUAL && methodName.equals(BRAND_CHECK_METHOD_NAME)
+    );
+
+    final List<Integer> targets =
+    searchForInstructions(targetMethod, new Searcher() {
+      @Override
+      public int search(CodeIterator ci, ConstPool cp)
+          throws NotFoundException, BadBytecode {
+        return findSequence(ci, cp, sequence);
+      }
+    });
+
+    final AtomicInteger offsetCount = new AtomicInteger();;
+
+    stripPvpCheck(pool, targetMethod, 2, new DefaultPredicate() {
+      @Override
+      public boolean isTarget(MethodCall m) {
+        int o = offsetCount.get();
+
+        int pos = m.indexOfBytecode() - (o * 8);
+
+        boolean found = super.isTarget(m) && targets.contains(pos);
+
+        if (found) {
+          offsetCount.set(o + 1);
+        }
+
+        return found;
+      }
+    });
+  }
+
   @Override
   public void preInit() {
     ClassPool pool = HookManager.getInstance().getClassPool();
@@ -281,7 +426,11 @@ public class BrandMod implements WurmServerMod, PreInitable {
         "getBehavioursFor", "action"
       });
 
+      // TODO: add logging
       mangleCreatureBehaviour(pool);
+
+      // TODO: add logging
+      mangleCommunicator(pool);
 
       logger.log(
         INFO, "Successfully enabled PVP server animal permission management");
@@ -292,14 +441,14 @@ public class BrandMod implements WurmServerMod, PreInitable {
   }
 
   private static class WasPatchedCheck {
-    private boolean patchDone = false;
+    private int patchesDone = 0;
 
-    public void setPatched() {
-      patchDone = true;
+    public void didPatch() {
+      patchesDone++;
     }
 
-    public boolean didPatch() {
-      return patchDone;
+    public int getPatchCount() {
+      return patchesDone;
     }
   }
 
@@ -308,11 +457,17 @@ public class BrandMod implements WurmServerMod, PreInitable {
         throws NotFoundException, BadBytecode;
   }
 
-  private static interface Predicate {
-    public boolean isTarget(MethodCall m);
+  private static interface Predicate<T> {
+    public boolean isTarget(T t);
   }
 
-  private static class DefaultPredicate implements Predicate {
+  @FunctionalInterface
+  private static interface LookaheadPredicate {
+    public boolean test(int op, String methodName);
+
+  }
+
+  private static class DefaultPredicate implements Predicate<MethodCall> {
     @Override
     public boolean isTarget(MethodCall m) {
       return m.getMethodName().equals(PVP_CHECK_METHOD_NAME) &&
