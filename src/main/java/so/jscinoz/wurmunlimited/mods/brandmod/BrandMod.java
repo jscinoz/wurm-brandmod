@@ -212,18 +212,18 @@ public class BrandMod implements WurmServerMod, PreInitable {
     stripPvpCheck(pool, method, 1, DEFAULT_PREDICATE);
   }
 
-  private void logStartMangle(String className) {
-    logger.log(INFO, String.format("Mangling %s", className));
+  private void logStartPatch(String className) {
+    logger.log(INFO, String.format("Patching %s", className));
   };
 
-  private void logFinishMangle(String className) {
-    logger.log(INFO, String.format("Successfully mangled %s", className));
+  private void logFinishPatch(String className) {
+    logger.log(INFO, String.format("Successfully patched %s", className));
   };
 
-  private void mangleClassMethods(
+  private void patchClassMethods(
       ClassPool pool, String className, String[] methodNames)
       throws BadBytecode, CannotCompileException, NotFoundException {
-    logStartMangle(className);
+    logStartPatch(className);
 
     CtClass targetClass = pool.get(className);
 
@@ -234,16 +234,16 @@ public class BrandMod implements WurmServerMod, PreInitable {
       stripPvpCheck(pool, targetMethod);
     }
 
-    logFinishMangle(className);
+    logFinishPatch(className);
   }
 
-  private void mangleClassMethods(
+  private void patchClassMethods(
       ClassPool pool, String className, String methodName)
       throws BadBytecode, CannotCompileException, NotFoundException {
-    mangleClassMethods(pool, className, new String[] { methodName });
+    patchClassMethods(pool, className, new String[] { methodName });
   }
 
-  private void mangleCBAddVehicleOptions(ClassPool pool, CtClass targetClass)
+  private void patchCBAddVehicleOptions(ClassPool pool, CtClass targetClass)
       throws NotFoundException, BadBytecode, CannotCompileException {
     CtMethod targetMethod =
       targetClass.getDeclaredMethods("addVehicleOptions")[0];
@@ -316,7 +316,7 @@ public class BrandMod implements WurmServerMod, PreInitable {
     return -1;
   }
 
-  private void mangleCBAction(ClassPool pool, CtClass targetClass)
+  private void patchCBAction(ClassPool pool, CtClass targetClass)
       throws NotFoundException, BadBytecode, CannotCompileException {
     CtMethod targetMethod =
       targetClass.getDeclaredMethods("action")[0];
@@ -358,26 +358,26 @@ public class BrandMod implements WurmServerMod, PreInitable {
   }
 
   // Need to do something a bit more complicated for this class, as we only want
-  // to strip some of the pvp checks within each method we mangle
-  private void mangleCreatureBehaviour(ClassPool pool)
+  // to strip some of the pvp checks within each method we patch
+  private void patchCreatureBehaviour(ClassPool pool)
       throws BadBytecode, CannotCompileException, NotFoundException {
     String className = CREATURE_BEHAVIOUR_CLASS_NAME;
 
-    logStartMangle(className);
+    logStartPatch(className);
 
     CtClass targetClass = pool.get(className);
 
-    mangleCBAddVehicleOptions(pool, targetClass);
-    mangleCBAction(pool, targetClass);
+    patchCBAddVehicleOptions(pool, targetClass);
+    patchCBAction(pool, targetClass);
 
-    logFinishMangle(className);
+    logFinishPatch(className);
   }
 
-  private void mangleCommunicator(ClassPool pool)
+  private void patchCommunicator(ClassPool pool)
       throws BadBytecode, CannotCompileException, NotFoundException {
     String className = COMMUNICATOR_CLASS_NAME;
 
-    logStartMangle(className);
+    logStartPatch(className);
 
     CtClass targetClass = pool.get(className);
     CtMethod targetMethod =
@@ -415,7 +415,7 @@ public class BrandMod implements WurmServerMod, PreInitable {
       return found;
     }));
 
-    logFinishMangle(className);
+    logFinishPatch(className);
   }
 
   @Override
@@ -425,15 +425,15 @@ public class BrandMod implements WurmServerMod, PreInitable {
     try {
       logger.log(INFO, "Enabling PVP server animal permission management");
 
-      mangleClassMethods(pool, BRAND_CLASS_NAME, "addInitialPermissions");
-      mangleClassMethods(pool, CREATURE_CLASS_NAME, "canHavePermissions");
-      mangleClassMethods(pool, CREATURES_CLASS_NAME, "getManagedAnimalsFor");
-      mangleClassMethods(pool, MANAGE_MENU_CLASS_NAME, new String[] {
+      patchClassMethods(pool, BRAND_CLASS_NAME, "addInitialPermissions");
+      patchClassMethods(pool, CREATURE_CLASS_NAME, "canHavePermissions");
+      patchClassMethods(pool, CREATURES_CLASS_NAME, "getManagedAnimalsFor");
+      patchClassMethods(pool, MANAGE_MENU_CLASS_NAME, new String[] {
         "getBehavioursFor", "action"
       });
 
-      mangleCreatureBehaviour(pool);
-      mangleCommunicator(pool);
+      patchCreatureBehaviour(pool);
+      patchCommunicator(pool);
 
       logger.log(
         INFO, "Successfully enabled PVP server animal permission management");
