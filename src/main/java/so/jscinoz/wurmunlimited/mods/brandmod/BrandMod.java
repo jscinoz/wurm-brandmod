@@ -27,6 +27,9 @@ public class BrandMod implements WurmServerMod, PreInitable {
   private static final String MANAGE_MENU_CLASS_NAME =
     "com.wurmonline.server.behaviours.ManageMenu";
 
+  private static final String CREATURE_CLASS_NAME =
+    "com.wurmonline.server.creatures.Creature";
+
   private static final String CREATURES_CLASS_NAME =
     "com.wurmonline.server.creatures.Creatures";
 
@@ -102,6 +105,7 @@ public class BrandMod implements WurmServerMod, PreInitable {
       logger.log(INFO, "Enabling PVP server animal permission management");
 
       mangleClassMethods(pool, BRAND_CLASS_NAME, "addInitialPermissions");
+      mangleClassMethods(pool, CREATURE_CLASS_NAME, "canHavePermissions");
       mangleClassMethods(pool, CREATURES_CLASS_NAME, "getManagedAnimalsFor");
       mangleClassMethods(pool, MANAGE_MENU_CLASS_NAME, new String[] {
         "getBehavioursFor", "action"
