@@ -22,8 +22,6 @@ dependencies {
 }
 
 task dist(type: Zip) {
-  archiveName = "brandmod.zip"
-
   dependsOn "jar"
 
   into("brandmod") {
