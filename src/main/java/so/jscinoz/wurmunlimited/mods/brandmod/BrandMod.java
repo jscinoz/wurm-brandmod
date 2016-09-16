@@ -6,6 +6,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.NoSuchElementException;
 import java.util.logging.Logger;
+import java.util.function.BiFunction;
+import java.util.function.BiPredicate;
+import java.util.function.Predicate;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.gotti.wurmunlimited.modloader.classhooks.HookManager;
@@ -60,8 +63,10 @@ public class BrandMod implements WurmServerMod, PreInitable {
 
   private static final String BRAND_CHECK_METHOD_NAME = "isBranded";
 
-  private static final Predicate<MethodCall> DEFAULT_PREDICATE =
-    new DefaultPredicate();
+  private static final Predicate<MethodCall> DEFAULT_PREDICATE = m -> {
+    return m.getMethodName().equals(PVP_CHECK_METHOD_NAME) &&
+           m.getClassName().equals(SERVERS_CLASS_NAME);
+  };
 
   private static final LookaheadPredicate DEFAULT_LOOKAHEAD_PREDICATE =
     (op, method) -> true;
@@ -170,7 +175,7 @@ public class BrandMod implements WurmServerMod, PreInitable {
     method.instrument(new ExprEditor() {
       @Override
       public void edit(MethodCall m) throws CannotCompileException {
-        if (p.isTarget(m)) {
+        if (p.test(m)) {
           // Replace call to Servers.isThisAPvpServer with literal false
           m.replace("$_ = false;");
 
@@ -235,58 +240,52 @@ public class BrandMod implements WurmServerMod, PreInitable {
     CtMethod targetMethod =
       targetClass.getDeclaredMethods("addVehicleOptions")[0];
 
-    final int targetPos = searchForInstruction(targetMethod, new Searcher() {
-      @Override
-      public int search(CodeIterator ci, ConstPool cp)
-          throws NotFoundException, BadBytecode {
-        int actionAddPos = -1;
-        int targetPos = -1;
+    final int targetPos = searchForInstruction(targetMethod, (ci, cp) -> {
+      int actionAddPos = -1;
+      int candidatePos = -1;
 
-        while (ci.hasNext()) {
-          int pos = ci.next();
-          int op = ci.byteAt(pos);
+      while (ci.hasNext()) {
+        int pos = ci.next();
+        int op = ci.byteAt(pos);
 
-          if (actionAddPos == -1) {
-            if (op == SIPUSH) {
-              int val = ci.s16bitAt(pos + 1);
-
-              if (val == 663) {
-                // Found where action 663 (MANAGE_ANIMAL) is pushed
-                actionAddPos = pos;
-
-                // Restart the iterator
-                ci.begin();
-              }
-            }
-          } else if (op == INVOKESTATIC) {
+        if (actionAddPos == -1) {
+          if (op == SIPUSH) {
             int val = ci.s16bitAt(pos + 1);
-            String methodName = cp.getMethodrefName(val);
 
-            if (methodName.equals(PVP_CHECK_METHOD_NAME)) {
-              if (pos < actionAddPos &&
-                  actionAddPos - pos < actionAddPos - targetPos) {
-                // We are before the actionAddPos, and closer to it than the
-                // last isThisAPvpServer call
-                targetPos = pos;
-              }
+            if (val == 663) {
+              // Found where action 663 (MANAGE_ANIMAL) is pushed
+              actionAddPos = pos;
+
+              // Restart the iterator
+              ci.begin();
+            }
+          }
+        } else if (op == INVOKESTATIC) {
+          int val = ci.s16bitAt(pos + 1);
+          String methodName = cp.getMethodrefName(val);
+
+          if (methodName.equals(PVP_CHECK_METHOD_NAME)) {
+            if (pos < actionAddPos &&
+                actionAddPos - pos < actionAddPos - candidatePos) {
+              // We are before the actionAddPos, and closer to it than the
+              // last isThisAPvpServer call
+              candidatePos = pos;
             }
           }
         }
-
-        if (targetPos != -1) {
-          return targetPos;
-        }
-
-        throw new NotFoundException("Could not find target instruction");
       }
+
+      if (candidatePos != -1) {
+        return candidatePos;
+      }
+
+      throw new NotFoundException("Could not find target instruction");
     });
 
-    stripPvpCheck(pool, targetMethod, new DefaultPredicate() {
-      @Override
-      public boolean isTarget(MethodCall m) {
-        return super.isTarget(m) && m.indexOfBytecode() == targetPos;
-      }
-    });
+    stripPvpCheck(
+      pool, targetMethod,
+      DEFAULT_PREDICATE.and(m -> m.indexOfBytecode() == targetPos)
+    );
   }
 
   // Does not move the passed CodeIterator
@@ -314,46 +313,40 @@ public class BrandMod implements WurmServerMod, PreInitable {
     CtMethod targetMethod =
       targetClass.getDeclaredMethods("action")[0];
 
-    final int targetPos = searchForInstruction(targetMethod, new Searcher() {
-      @Override
-      public int search(CodeIterator ci, ConstPool cp)
-          throws BadBytecode, NotFoundException {
-        int switchPos = -1;
-        while (ci.hasNext()) {
-          int pos = ci.next();
-          int op = ci.byteAt(pos);
+    final int targetPos = searchForInstruction(targetMethod, (ci, cp) -> {
+      int switchPos = -1;
+      while (ci.hasNext()) {
+        int pos = ci.next();
+        int op = ci.byteAt(pos);
 
-          if (switchPos == -1) {
-            if (op == LOOKUPSWITCH) {
-              int casePos = findPosForCase(ci, pos, 663);
+        if (switchPos == -1) {
+          if (op == LOOKUPSWITCH) {
+            int casePos = findPosForCase(ci, pos, 663);
 
-              if (casePos != -1) {
-                int caseOp = ci.byteAt(casePos);
+            if (casePos != -1) {
+              int caseOp = ci.byteAt(casePos);
 
-                if (caseOp == INVOKESTATIC) {
-                  int val = ci.s16bitAt(casePos + 1);
-                  String methodName = cp.getMethodrefName(val);
+              if (caseOp == INVOKESTATIC) {
+                int val = ci.s16bitAt(casePos + 1);
+                String methodName = cp.getMethodrefName(val);
 
-                  if (methodName.equals(PVP_CHECK_METHOD_NAME)) {
-                    return casePos;
-                  }
+                if (methodName.equals(PVP_CHECK_METHOD_NAME)) {
+                  return casePos;
                 }
               }
             }
-
           }
+
         }
-
-        throw new NotFoundException("Could not find target instruction");
       }
+
+      throw new NotFoundException("Could not find target instruction");
     });
 
-    stripPvpCheck(pool, targetMethod, new DefaultPredicate() {
-      @Override
-      public boolean isTarget(MethodCall m) {
-        return super.isTarget(m) && m.indexOfBytecode() == targetPos;
-      }
-    });
+    stripPvpCheck(
+      pool, targetMethod,
+      DEFAULT_PREDICATE.and(m -> m.indexOfBytecode() == targetPos)
+    );
   }
 
   // Need to do something a bit more complicated for this class, as we only want
@@ -384,32 +377,25 @@ public class BrandMod implements WurmServerMod, PreInitable {
     );
 
     final List<Integer> targets =
-    searchForInstructions(targetMethod, new Searcher() {
-      @Override
-      public int search(CodeIterator ci, ConstPool cp)
-          throws NotFoundException, BadBytecode {
-        return findSequence(ci, cp, sequence);
-      }
+    searchForInstructions(targetMethod, (ci, cp) -> {
+      return findSequence(ci, cp, sequence);
     });
 
     final AtomicInteger offsetCount = new AtomicInteger();;
 
-    stripPvpCheck(pool, targetMethod, 2, new DefaultPredicate() {
-      @Override
-      public boolean isTarget(MethodCall m) {
-        int o = offsetCount.get();
+    stripPvpCheck(pool, targetMethod, 2, DEFAULT_PREDICATE.and(m -> {
+      int o = offsetCount.get();
 
-        int pos = m.indexOfBytecode() - (o * 8);
+      int pos = m.indexOfBytecode() - (o * 8);
 
-        boolean found = super.isTarget(m) && targets.contains(pos);
+      boolean found = targets.contains(pos);
 
-        if (found) {
-          offsetCount.set(o + 1);
-        }
-
-        return found;
+      if (found) {
+        offsetCount.set(o + 1);
       }
-    });
+
+      return found;
+    }));
   }
 
   @Override
@@ -452,26 +438,12 @@ public class BrandMod implements WurmServerMod, PreInitable {
     }
   }
 
+  @FunctionalInterface
   private static interface Searcher {
     public int search(CodeIterator ci, ConstPool cp)
         throws NotFoundException, BadBytecode;
   }
 
-  private static interface Predicate<T> {
-    public boolean isTarget(T t);
-  }
-
-  @FunctionalInterface
-  private static interface LookaheadPredicate {
-    public boolean test(int op, String methodName);
-
-  }
-
-  private static class DefaultPredicate implements Predicate<MethodCall> {
-    @Override
-    public boolean isTarget(MethodCall m) {
-      return m.getMethodName().equals(PVP_CHECK_METHOD_NAME) &&
-             m.getClassName().equals(SERVERS_CLASS_NAME);
-    }
-  }
+  private static interface LookaheadPredicate
+    extends BiPredicate<Integer, String> {}
 }
