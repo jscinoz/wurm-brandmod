@@ -212,10 +212,18 @@ public class BrandMod implements WurmServerMod, PreInitable {
     stripPvpCheck(pool, method, 1, DEFAULT_PREDICATE);
   }
 
+  private void logStartMangle(String className) {
+    logger.log(INFO, String.format("Mangling %s", className));
+  };
+
+  private void logFinishMangle(String className) {
+    logger.log(INFO, String.format("Successfully mangled %s", className));
+  };
+
   private void mangleClassMethods(
       ClassPool pool, String className, String[] methodNames)
       throws BadBytecode, CannotCompileException, NotFoundException {
-    logger.log(INFO, String.format("Mangling %s", className));
+    logStartMangle(className);
 
     CtClass targetClass = pool.get(className);
 
@@ -226,7 +234,7 @@ public class BrandMod implements WurmServerMod, PreInitable {
       stripPvpCheck(pool, targetMethod);
     }
 
-    logger.log(INFO, String.format("Successfully mangled %s", className));
+    logFinishMangle(className);
   }
 
   private void mangleClassMethods(
@@ -353,15 +361,25 @@ public class BrandMod implements WurmServerMod, PreInitable {
   // to strip some of the pvp checks within each method we mangle
   private void mangleCreatureBehaviour(ClassPool pool)
       throws BadBytecode, CannotCompileException, NotFoundException {
-    CtClass targetClass = pool.get(CREATURE_BEHAVIOUR_CLASS_NAME);
+    String className = CREATURE_BEHAVIOUR_CLASS_NAME;
+
+    logStartMangle(className);
+
+    CtClass targetClass = pool.get(className);
 
     mangleCBAddVehicleOptions(pool, targetClass);
     mangleCBAction(pool, targetClass);
+
+    logFinishMangle(className);
   }
 
   private void mangleCommunicator(ClassPool pool)
       throws BadBytecode, CannotCompileException, NotFoundException {
-    CtClass targetClass = pool.get(COMMUNICATOR_CLASS_NAME);
+    String className = COMMUNICATOR_CLASS_NAME;
+
+    logStartMangle(className);
+
+    CtClass targetClass = pool.get(className);
     CtMethod targetMethod =
       targetClass.getDeclaredMethods("reallyHandle_CMD_MOVE_INVENTORY")[0];
 
@@ -396,6 +414,8 @@ public class BrandMod implements WurmServerMod, PreInitable {
 
       return found;
     }));
+
+    logFinishMangle(className);
   }
 
   @Override
@@ -412,10 +432,7 @@ public class BrandMod implements WurmServerMod, PreInitable {
         "getBehavioursFor", "action"
       });
 
-      // TODO: add logging
       mangleCreatureBehaviour(pool);
-
-      // TODO: add logging
       mangleCommunicator(pool);
 
       logger.log(
