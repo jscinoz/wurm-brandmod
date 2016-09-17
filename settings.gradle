@@ -1,1 +1,3 @@
-rootProject.name = 'wurm-brandmod'
+rootProject.name = 'wurmmods'
+
+include "brandmod";
