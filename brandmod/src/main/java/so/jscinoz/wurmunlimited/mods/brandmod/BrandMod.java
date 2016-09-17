@@ -34,6 +34,7 @@ import static javassist.bytecode.Opcode.LOOKUPSWITCH;
 import static javassist.bytecode.Opcode.INVOKESTATIC;
 import static javassist.bytecode.Opcode.INVOKEVIRTUAL;
 import static javassist.bytecode.Opcode.SIPUSH;
+import static so.jscinoz.wurmunlimited.mods.common.ModSupport.*;
 
 public class BrandMod implements WurmServerMod, PreInitable {
   private static final String BRAND_CLASS_NAME =
@@ -245,20 +246,12 @@ public class BrandMod implements WurmServerMod, PreInitable {
     stripPvpCheck(pool, method, 1, DEFAULT_PREDICATE);
   }
 
-  private void logStartPatch(String className) {
-    logger.log(INFO, String.format("Patching %s", className));
-  };
-
-  private void logFinishPatch(String className) {
-    logger.log(INFO, String.format("Successfully patched %s", className));
-  };
-
   // Get a class by name and for each given method name, lookup a matching
   // method (by name alone - parameters ignored) and do stripPvpCheck for each
   private void patchClassMethods(
       ClassPool pool, String className, String[] methodNames)
       throws BadBytecode, CannotCompileException, NotFoundException {
-    logStartPatch(className);
+    logStartPatch(logger, className);
 
     CtClass targetClass = pool.get(className);
 
@@ -269,7 +262,7 @@ public class BrandMod implements WurmServerMod, PreInitable {
       stripPvpCheck(pool, targetMethod);
     }
 
-    logFinishPatch(className);
+    logFinishPatch(logger, className);
   }
 
   private void patchClassMethods(
@@ -421,14 +414,14 @@ public class BrandMod implements WurmServerMod, PreInitable {
       throws BadBytecode, CannotCompileException, NotFoundException {
     String className = CREATURE_BEHAVIOUR_CLASS_NAME;
 
-    logStartPatch(className);
+    logStartPatch(logger, className);
 
     CtClass targetClass = pool.get(className);
 
     patchCBAddVehicleOptions(pool, targetClass);
     patchCBAction(pool, targetClass);
 
-    logFinishPatch(className);
+    logFinishPatch(logger, className);
   }
 
   // Patches the reallyHandle_CMD_MOVE_INVENTORY method of the Communicator
@@ -441,7 +434,7 @@ public class BrandMod implements WurmServerMod, PreInitable {
       throws BadBytecode, CannotCompileException, NotFoundException {
     String className = COMMUNICATOR_CLASS_NAME;
 
-    logStartPatch(className);
+    logStartPatch(logger, className);
 
     CtClass targetClass = pool.get(className);
     CtMethod targetMethod =
@@ -490,7 +483,7 @@ public class BrandMod implements WurmServerMod, PreInitable {
       return found;
     }));
 
-    logFinishPatch(className);
+    logFinishPatch(logger, className);
   }
 
   @Override

@@ -1,4 +1,5 @@
 rootProject.name = 'wurmmods'
 
+include "common";
 include "brandmod";
 include "smeltmod";

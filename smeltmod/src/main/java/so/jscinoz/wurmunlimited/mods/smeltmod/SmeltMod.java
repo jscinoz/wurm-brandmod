@@ -20,6 +20,7 @@ import org.gotti.wurmunlimited.modloader.interfaces.WurmServerMod;
 import org.gotti.wurmunlimited.modloader.interfaces.PreInitable;
 
 import static java.util.logging.Level.INFO;
+import static so.jscinoz.wurmunlimited.mods.common.ModSupport.*;
 
 public class SmeltMod implements WurmServerMod, PreInitable {
   private static final String CREATURE_CLASS_NAME =
@@ -28,21 +29,13 @@ public class SmeltMod implements WurmServerMod, PreInitable {
   private static final Logger logger =
     Logger.getLogger(SmeltMod.class.getName());
 
-  private void logStartPatch(String className) {
-    logger.log(INFO, String.format("Patching %s", className));
-  };
-
-  private void logFinishPatch(String className) {
-    logger.log(INFO, String.format("Successfully patched %s", className));
-  };
-
   // TODO: Clean this up (only patch target instructions rather than all), and
   // split to separate mod
   private void patchKeyTest(ClassPool pool)
       throws BadBytecode, CannotCompileException, NotFoundException {
     String className = "com.wurmonline.server.behaviours.ItemBehaviour";
 
-    logStartPatch(className);
+    logStartPatch(logger, className);
 
     CtClass targetClass = pool.get(className);
     CtMethod targetMethod =
@@ -87,6 +80,8 @@ public class SmeltMod implements WurmServerMod, PreInitable {
         }
       }
     });
+
+    logFinishPatch(logger, className);
   }
 
   public void preInit() {
@@ -94,6 +89,7 @@ public class SmeltMod implements WurmServerMod, PreInitable {
 
     try {
       logger.log(INFO, "Enabling key/lock smelting");
+
       patchKeyTest(pool);
 
       logger.log(INFO, "Successfully enabled key/lock smelting");

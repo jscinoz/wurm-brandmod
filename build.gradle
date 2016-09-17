@@ -15,13 +15,6 @@ subprojects  {
     }
   }
 
-  dependencies {
-    // Also pulls in the specific version of javassist that will be available at
-    // runtime
-    compile group: "org.gotti.wurmunlimited", name: "server-modlauncher",
-            version: "0.20"
-  }
-
   tasks.withType(JavaCompile) {
     options.compilerArgs <<
       "-Werror" <<
@@ -36,6 +29,29 @@ subprojects  {
   group = "so.jscinoz.wurmunlimited.mods"
   version = "0.0.1"
 
+  jar {
+    version = null
+
+    manifest {
+      attributes(
+        "Implementation-Version": project.version
+      )
+    }
+  }
+}
+
+def modProjects = subprojects - project(":common");
+
+configure(modProjects) {
+  dependencies {
+    compile project(":common")
+
+    // Also pulls in the specific version of javassist that will be available at
+    // runtime
+    compile group: "org.gotti.wurmunlimited", name: "server-modlauncher",
+            version: "0.20"
+  }
+
   task dist(type: Zip) {
     dependsOn "jar"
 
@@ -45,18 +61,10 @@ subprojects  {
       }
     }
 
+    // TODO: Add common jar
+
     from {
       file "${project.projectDir}/src/${project.name}.properties"
-    }
-  }
-
-  jar {
-    version = null
-
-    manifest {
-      attributes(
-        "Implementation-Version": project.version
-      )
     }
   }
 }
