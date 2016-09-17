@@ -4,9 +4,7 @@ import java.lang.FunctionalInterface;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.NoSuchElementException;
 import java.util.logging.Logger;
-import java.util.function.BiFunction;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -82,14 +80,15 @@ public class BrandMod implements WurmServerMod, PreInitable {
 
   // Finds the first method with the given name on the given class. Method
   // parameters are ignored.
-  private CtMethod findMatchingMethod(CtClass targetClass, String methodName) {
+  private CtMethod findMatchingMethod(CtClass targetClass, String methodName)
+      throws NotFoundException {
     for (CtMethod m : targetClass.getDeclaredMethods()) {
       if (m.getName().equals(methodName)) {
         return m;
       }
     }
 
-    throw new NoSuchElementException(String.format(
+    throw new NotFoundException(String.format(
       "Could not find method %s on %s", methodName, targetClass.getName()));
   }
 
