@@ -1,61 +1,62 @@
-apply plugin: "java"
-
 defaultTasks "dist"
 
-sourceCompatibility = JavaVersion.VERSION_1_8
-targetCompatibility = JavaVersion.VERSION_1_8
+subprojects  {
+  apply plugin: "java"
 
-repositories {
-  mavenCentral()
-  jcenter()
+  sourceCompatibility = JavaVersion.VERSION_1_8
+  targetCompatibility = JavaVersion.VERSION_1_8
 
-  maven {
-    url "http://gotti.no-ip.org/maven/repository"
-  }
-}
+  repositories {
+    mavenCentral()
+    jcenter()
 
-dependencies {
-  // Also pulls in the specific version of javassist that will be available at
-  // runtime
-  compile group: "org.gotti.wurmunlimited", name: "server-modlauncher",
-          version: "0.20"
-}
-
-task dist(type: Zip) {
-  dependsOn "jar"
-
-  into("brandmod") {
-    from {
-      file jar.archivePath
+    maven {
+      url "http://gotti.no-ip.org/maven/repository"
     }
   }
 
-  from {
-    file "src/brandmod.properties"
+  dependencies {
+    // Also pulls in the specific version of javassist that will be available at
+    // runtime
+    compile group: "org.gotti.wurmunlimited", name: "server-modlauncher",
+            version: "0.20"
   }
-}
 
-tasks.withType(JavaCompile) {
-  options.compilerArgs <<
-    "-Werror" <<
-    "-Xlint:all" <<
-    "-Xlint:-processing" <<
-    "-Xlint:-options" <<
-    // Needed for Javassist
-    "-Xlint:-classfile" <<
-    "-Xdiags:verbose"
-}
+  tasks.withType(JavaCompile) {
+    options.compilerArgs <<
+      "-Werror" <<
+      "-Xlint:all" <<
+      "-Xlint:-processing" <<
+      "-Xlint:-options" <<
+      // Needed for Javassist
+      "-Xlint:-classfile" <<
+      "-Xdiags:verbose"
+  }
 
-group = "so.jscinoz.wurmunlimited.mods"
-version = "0.0.1"
+  group = "so.jscinoz.wurmunlimited.mods"
+  version = "0.0.1"
 
-jar {
-  baseName = "brandmod"
-  version = null
+  task dist(type: Zip) {
+    dependsOn "jar"
 
-  manifest {
-    attributes(
-      "Implementation-Version": project.version
-    )
+    into(project.name) {
+      from {
+        file jar.archivePath
+      }
+    }
+
+    from {
+      file "${project.projectDir}/src/${project.name}.properties"
+    }
+  }
+
+  jar {
+    version = null
+
+    manifest {
+      attributes(
+        "Implementation-Version": project.version
+      )
+    }
   }
 }
