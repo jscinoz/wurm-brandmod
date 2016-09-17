@@ -15,6 +15,13 @@ subprojects  {
     }
   }
 
+  dependencies {
+    // Also pulls in the specific version of javassist that will be available at
+    // runtime
+    compile group: "org.gotti.wurmunlimited", name: "server-modlauncher",
+            version: "0.20"
+  }
+
   configurations {
     modRuntime {
       description = "Dependencies needed by mods at runtime that aren't provided"
@@ -59,11 +66,6 @@ configure(modProjects) {
 
   dependencies {
     compile commonProject
-
-    // Also pulls in the specific version of javassist that will be available at
-    // runtime
-    compile group: "org.gotti.wurmunlimited", name: "server-modlauncher",
-            version: "0.20"
   }
 
   task dist(type: Zip) {

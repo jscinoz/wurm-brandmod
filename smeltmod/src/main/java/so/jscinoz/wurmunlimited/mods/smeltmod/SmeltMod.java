@@ -14,38 +14,33 @@ import javassist.bytecode.ConstPool;
 import javassist.bytecode.BadBytecode;
 import javassist.expr.ExprEditor;
 import javassist.expr.MethodCall;
+
 import org.gotti.wurmunlimited.modloader.classhooks.HookManager;
 import org.gotti.wurmunlimited.modloader.classhooks.HookException;
 import org.gotti.wurmunlimited.modloader.interfaces.WurmServerMod;
 import org.gotti.wurmunlimited.modloader.interfaces.PreInitable;
 
+import so.jscinoz.wurmunlimited.mods.common.BaseMod;
+
 import static java.util.logging.Level.INFO;
-import static so.jscinoz.wurmunlimited.mods.common.ModSupport.*;
 
-public class SmeltMod implements WurmServerMod, PreInitable {
-  private static final String CREATURE_CLASS_NAME =
-    "com.wurmonline.server.creatures.Creature";
-
-  private static final Logger logger =
-    Logger.getLogger(SmeltMod.class.getName());
+public class SmeltMod extends BaseMod implements WurmServerMod, PreInitable {
+  public SmeltMod() {
+    super(Logger.getLogger(SmeltMod.class.getName()));
+  }
 
   // TODO: Clean this up (only patch target instructions rather than all), and
   // split to separate mod
-  private void patchKeyTest(ClassPool pool)
-      throws BadBytecode, CannotCompileException, NotFoundException {
-    String className = "com.wurmonline.server.behaviours.ItemBehaviour";
-
-    logStartPatch(logger, className);
-
-    CtClass targetClass = pool.get(className);
+  private final ClassPatcher patchItemBehaviour = targetClass -> {
+    ClassPool pool = targetClass.getClassPool();
     CtMethod targetMethod =
       targetClass.getDeclaredMethod("action", new CtClass[] {
         pool.get("com.wurmonline.server.behaviours.Action"),
-        pool.get(CREATURE_CLASS_NAME),
-        pool.get("com.wurmonline.server.items.Item"),
-        pool.get("com.wurmonline.server.items.Item"),
+        pool.get(Wurm.Class.Creature),
+        pool.get(Wurm.Class.Item),
+        pool.get(Wurm.Class.Item),
         CtClass.shortType,
-        CtClass.floatType
+        CtClass.floatType,
       });
 
     targetMethod.instrument(new ExprEditor() {
@@ -61,9 +56,9 @@ public class SmeltMod implements WurmServerMod, PreInitable {
 
     targetMethod =
       targetClass.getDeclaredMethod("getBehavioursFor", new CtClass[] {
-        pool.get(CREATURE_CLASS_NAME),
-        pool.get("com.wurmonline.server.items.Item"),
-        pool.get("com.wurmonline.server.items.Item"),
+        pool.get(Wurm.Class.Creature),
+        pool.get(Wurm.Class.Item),
+        pool.get(Wurm.Class.Item),
       });
 
     targetMethod.instrument(new ExprEditor() {
@@ -80,9 +75,7 @@ public class SmeltMod implements WurmServerMod, PreInitable {
         }
       }
     });
-
-    logFinishPatch(logger, className);
-  }
+  };
 
   public void preInit() {
     ClassPool pool = HookManager.getInstance().getClassPool();
@@ -90,7 +83,7 @@ public class SmeltMod implements WurmServerMod, PreInitable {
     try {
       logger.log(INFO, "Enabling key/lock smelting");
 
-      patchKeyTest(pool);
+      patchClass(pool, Wurm.Class.ItemBehaviour, patchItemBehaviour);
 
       logger.log(INFO, "Successfully enabled key/lock smelting");
     } catch (Exception e) {
