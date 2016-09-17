@@ -43,8 +43,22 @@ subprojects  {
 def modProjects = subprojects - project(":common");
 
 configure(modProjects) {
+  def commonProject = project(":common");
+
+  configurations {
+    modRuntime {
+      description = "Dependencies needed by mods at runtime that aren't provided"
+
+      // Include everything from the runtime config...
+      extendsFrom configurations.runtime
+
+      // ... except the mod launcher (& dependencies) itself
+      exclude group: "org.gotti.wurmunlimited"
+    }
+  }
+
   dependencies {
-    compile project(":common")
+    compile commonProject
 
     // Also pulls in the specific version of javassist that will be available at
     // runtime
@@ -61,10 +75,18 @@ configure(modProjects) {
       }
     }
 
-    // TODO: Add common jar
+    final modClassPath = (
+      // Everything in the common directory (the common.jar itself and any deps)
+      configurations.modRuntime.collect { "common/${it.name}" } +
+      // Our own jar
+      "${project.name}/${jar.archiveName}"
+    ).join(",")
 
-    from {
-      file "${project.projectDir}/src/${project.name}.properties"
+    from ("${project.projectDir}/src") {
+      include "${project.name}.properties"
+
+      // Build the proper classpath entry for the mod
+      expand(modClassPath: modClassPath)
     }
   }
 }
