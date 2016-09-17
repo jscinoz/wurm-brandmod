@@ -15,6 +15,18 @@ subprojects  {
     }
   }
 
+  configurations {
+    modRuntime {
+      description = "Dependencies needed by mods at runtime that aren't provided"
+
+      // Include everything from the runtime config...
+      extendsFrom configurations.runtime
+
+      // ... except the mod launcher (& dependencies) itself
+      exclude group: "org.gotti.wurmunlimited"
+    }
+  }
+
   tasks.withType(JavaCompile) {
     options.compilerArgs <<
       "-Werror" <<
@@ -45,18 +57,6 @@ def modProjects = subprojects - project(":common");
 configure(modProjects) {
   def commonProject = project(":common");
 
-  configurations {
-    modRuntime {
-      description = "Dependencies needed by mods at runtime that aren't provided"
-
-      // Include everything from the runtime config...
-      extendsFrom configurations.runtime
-
-      // ... except the mod launcher (& dependencies) itself
-      exclude group: "org.gotti.wurmunlimited"
-    }
-  }
-
   dependencies {
     compile commonProject
 
@@ -69,17 +69,18 @@ configure(modProjects) {
   task dist(type: Zip) {
     dependsOn "jar"
 
-    into(project.name) {
-      from {
-        file jar.archivePath
-      }
+    final modDir = project.name;
+
+    into(modDir) {
+      from configurations.modRuntime
+      from jar.archivePath
     }
 
     final modClassPath = (
       // Everything in the common directory (the common.jar itself and any deps)
-      configurations.modRuntime.collect { "common/${it.name}" } +
+      configurations.modRuntime.collect { "${modDir}/${it.name}" } +
       // Our own jar
-      "${project.name}/${jar.archiveName}"
+      "${modDir}/${jar.archiveName}"
     ).join(",")
 
     from ("${project.projectDir}/src") {
