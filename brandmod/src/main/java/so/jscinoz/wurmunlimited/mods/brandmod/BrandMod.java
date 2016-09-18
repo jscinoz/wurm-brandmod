@@ -128,7 +128,6 @@ public class BrandMod extends BaseMod implements WurmServerMod, PreInitable {
       throw new NotFoundException("Could not find target instruction");
     });
 
-
     final int targetPos =
     findNearestPreceding(targetMethod, actionAddPos, (ci, cp) -> {
       int pos = ci.next();
@@ -230,36 +229,17 @@ public class BrandMod extends BaseMod implements WurmServerMod, PreInitable {
     );
 
     patchClassMethods(pool, targetMethod -> {
-      final List<Integer> targets =
-      searchForInstructions(targetMethod, (ci, cp) -> {
-        return findSequence(ci, cp, sequence);
-      });
-
-      // Each time we strip a PVP check, the bytecode that replaces the
-      // INVOKESTATIC for isThisAPvpServer is two bytes longer. For
-      // isThisAPvpServer checks encountered by ExprEditor after the first one,
-      // their position in the bytecode array will not match that of the original
-      // bytecode (i.e. that which is in the targets List). We need to keep track
-      // of how many modifications we've made, so we can subtract 8 * offsetCount
-      // from the encountered index to find the instruction's original index in
-      // the unmodified bytecode beforoe matching against the targets List
-      final AtomicInteger offsetCount = new AtomicInteger();
-
       stripPvpCheck(targetMethod, 2, DEFAULT_PREDICATE.and(m -> {
-        int o = offsetCount.get();
+        try {
+          List<Integer> targets =
+          searchForInstructions(targetMethod, (ci, cp) -> {
+            return findSequence(ci, cp, sequence);
+          });
 
-        // Account for drift introduced by earlier modifications
-        int pos = m.indexOfBytecode() - (o * 8);
-
-        boolean found = targets.contains(pos);
-
-        if (found) {
-          // Got a matching instruction, so ExprEditor is going to modify this one
-          // after we return. Update the patch counter.
-          offsetCount.set(o + 1);
+          return targets.contains(m.indexOfBytecode());
+        } catch (NotFoundException | BadBytecode e) {
+          return false;
         }
-
-        return found;
       }));
     }, className, "reallyHandle_CMD_MOVE_INVENTORY");
   }
