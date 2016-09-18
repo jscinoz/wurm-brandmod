@@ -148,6 +148,45 @@ public abstract class BaseMod {
     return searchForInstructions(method, searcher).get(0);
   }
 
+  protected static int findNearestPreceding(
+      CtMethod method, int preceding, Searcher searcher)
+      throws NotFoundException, BadBytecode {
+    MethodInfo mi = method.getMethodInfo();
+    ConstPool cp = mi.getConstPool();
+    CodeAttribute ca = mi.getCodeAttribute();
+    CodeIterator ci = ca.iterator();
+
+    int candidatePos = -1;
+
+    while (ci.hasNext()) {
+      try {
+        int pos = ci.lookAhead();
+
+        if (pos < preceding) {
+          int matchPos = searcher.search(ci, cp);
+
+          if (preceding - matchPos < preceding - candidatePos) {
+            // We're closer than before and still before the instuction at
+            // 'preceding'
+            candidatePos = matchPos;
+          }
+        } else {
+          // We've reached / gone past preceding, the instruction we're
+          // looking for isn't here.
+          break;
+        }
+      } catch (NotFoundException e) {
+        break;
+      }
+    }
+
+    if (candidatePos != -1) {
+      return candidatePos;
+    }
+
+    throw new NotFoundException("Could not find target instruction");
+  }
+
   // Finds the instruction pointed to by a LOOKUPSWITCH for the given value.
   // switchIndex is assumed to be the index of the first byte of a LOOKUPSWITCH
   // instruction. Does not mutate the passed CodeIterator
