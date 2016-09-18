@@ -244,6 +244,13 @@ public abstract class BaseMod {
     logFinishPatch(className);
   }
 
+  protected void patchMethod(CtMethod targetMethod, MethodPatcher... patchers)
+      throws BadBytecode, CannotCompileException, NotFoundException {
+    for (MethodPatcher patcher : patchers) {
+      patcher.patch(targetMethod);
+    }
+  }
+
   protected void patchClass(
       ClassPool pool, CtClass targetClass, ClassPatcher... patchers)
       throws BadBytecode, CannotCompileException, NotFoundException {
