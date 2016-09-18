@@ -80,9 +80,9 @@ configure(modProjects) {
 
     final modClassPath = (
       // Everything in the common directory (the common.jar itself and any deps)
-      configurations.modRuntime.collect { "${modDir}/${it.name}" } +
+      configurations.modRuntime.collect { it.name } +
       // Our own jar
-      "${modDir}/${jar.archiveName}"
+      jar.archiveName
     ).join(",")
 
     from ("${project.projectDir}/src") {
