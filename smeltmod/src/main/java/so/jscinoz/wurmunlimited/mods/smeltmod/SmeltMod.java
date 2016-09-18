@@ -28,6 +28,12 @@ import static javassist.bytecode.Opcode.SIPUSH;
 import static javassist.bytecode.Opcode.INVOKEVIRTUAL;
 
 public class SmeltMod extends BaseMod implements WurmServerMod, PreInitable {
+  private static final String REPLACEMENT_IS_METAL =
+    "$_ = $0.isKey() || $0.isLock() ? true : $proceed($$);";
+
+  private static final String REPLACEMENT_IS_INDESTRUCTIBLE =
+    "$_ = $0.isKey() || $0.isLock() ? false: $proceed($$);";
+
   public SmeltMod() {
     super(Logger.getLogger(SmeltMod.class.getName()));
   }
@@ -70,64 +76,62 @@ public class SmeltMod extends BaseMod implements WurmServerMod, PreInitable {
 
     final int isIndestructibleTargetPos =
     findNearestPreceding(targetMethod, actionAddPos, (ci, cp) -> {
-      while (ci.hasNext()) {
-        int pos = ci.next();
-        int op = ci.byteAt(pos);
+      int pos = ci.next();
+      int op = ci.byteAt(pos);
 
-        if (op == INVOKEVIRTUAL) {
-          int val = ci.s16bitAt(pos + 1);
-          String methodName = cp.getMethodrefName(val);
+      if (op == INVOKEVIRTUAL) {
+        int val = ci.s16bitAt(pos + 1);
+        String methodName = cp.getMethodrefName(val);
 
-          if (methodName.equals(Wurm.Method.isIndestructible)) {
-            return pos;
-          }
+        if (methodName.equals(Wurm.Method.isIndestructible)) {
+          return pos;
         }
       }
 
-      throw new NotFoundException("Could not find target instruction");
+      return -1;
     });
+
+    System.err.println("isI " + isIndestructibleTargetPos);
 
     final int isMetalTargetPos =
     findNearestPreceding(targetMethod, actionAddPos, (ci, cp) -> {
-      while (ci.hasNext()) {
-        int pos = ci.next();
-        int op = ci.byteAt(pos);
+      int pos = ci.next();
+      int op = ci.byteAt(pos);
 
-        if (op == INVOKEVIRTUAL) {
-          int val = ci.s16bitAt(pos + 1);
-          String methodName = cp.getMethodrefName(val);
+      if (op == INVOKEVIRTUAL) {
+        int val = ci.s16bitAt(pos + 1);
+        String methodName = cp.getMethodrefName(val);
 
-          if (methodName.equals(Wurm.Method.isMetal)) {
-            return pos;
-          }
+        if (methodName.equals(Wurm.Method.isMetal)) {
+          return pos;
         }
       }
 
-      throw new NotFoundException("Could not find target instruction");
+      return -1;
     });
 
+    System.err.println("isM " + isMetalTargetPos);
 
-    final AtomicInteger patchCount = new AtomicInteger();
-
-    targetMethod.instrument(new ExprEditor() {
-      @Override
-      public void edit(MethodCall m) throws CannotCompileException {
-        int o = patchCount.get();
+    patchExpressions(
+      targetMethod,
+      "Patching isMetal and isIndestructible checks from %s",
+      "Successfully patched isMetal and isIndestructible checks from %s",
+      2,
+      (m, check) -> {
+        int o = check.getPatchCount();
         int methodPos = m.indexOfBytecode() - (o * 8);
 
         if (m.getMethodName().equals(Wurm.Method.isIndestructible) &&
             methodPos == isIndestructibleTargetPos) {
-          System.err.println("2: got target isIndestructible");
-
-          m.replace("$_ = $0.isKey() || $0.isLock() ? false : $proceed($$);");
+          m.replace(REPLACEMENT_IS_INDESTRUCTIBLE);
+          check.didPatch();
         } else if (m.getMethodName().equals(Wurm.Method.isMetal) &&
                    methodPos == isMetalTargetPos) {
-          System.err.println("2: got target isMetal");
-
-          m.replace("$_ = $0.isKey() || $0.isLock() ? true : $proceed($$);");
+          m.replace(REPLACEMENT_IS_METAL);
+          check.didPatch();
         }
       }
-    });
+    );
   };
 
   // TODO: Clean this up (only patch target instructions rather than all), and

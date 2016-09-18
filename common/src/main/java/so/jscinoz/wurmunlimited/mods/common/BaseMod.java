@@ -16,6 +16,8 @@ import javassist.bytecode.CodeIterator;
 import javassist.bytecode.ConstPool;
 import javassist.bytecode.MethodInfo;
 import javassist.NotFoundException;
+import javassist.expr.ExprEditor;
+import javassist.expr.MethodCall;
 
 import static java.util.logging.Level.INFO;
 import static javassist.bytecode.Opcode.INVOKESTATIC;
@@ -271,6 +273,34 @@ public abstract class BaseMod {
     logFinishPatch(className);
   }
 
+  protected void patchExpressions(
+      CtMethod method, String logStartTmpl, String logEndTmpl,
+      int expectedPatches, ExpressionPatcher patcher)
+      throws CannotCompileException, NotFoundException {
+    String fqMethodName = String.format(
+      "%s.%s", method.getDeclaringClass().getName(), method.getName());
+
+    logger.log(INFO, String.format(logStartTmpl, fqMethodName));
+
+    final WasPatchedCheck check = new WasPatchedCheck();
+
+    method.instrument(new ExprEditor() {
+      @Override
+      public void edit(MethodCall m) throws CannotCompileException {
+        patcher.patch(m, check);
+      }
+    });
+
+    int patchCount = check.getPatchCount();
+
+    if (patchCount != expectedPatches) {
+      throw new NotFoundException(String.format(
+        "Only %d patches were done, expected %d", patchCount, expectedPatches));
+    }
+
+    logger.log(INFO, String.format(logEndTmpl, fqMethodName));
+  }
+
   // Helper class so we can assert the expected number of bytecode patches were
   // done.
   protected static class WasPatchedCheck {
@@ -307,6 +337,12 @@ public abstract class BaseMod {
   protected static interface ClassPatcher {
     public void patch(CtClass targetClass)
         throws BadBytecode, NotFoundException, CannotCompileException;
+  }
+
+  @FunctionalInterface
+  protected static interface ExpressionPatcher {
+    public void patch(MethodCall m, WasPatchedCheck check)
+        throws CannotCompileException;
   }
 
   // Convenience alias

@@ -59,18 +59,13 @@ public class BrandMod extends BaseMod implements WurmServerMod, PreInitable {
   // don't silently continue if the patching didn't go exactly as intended.
   private void stripPvpCheck(
       CtMethod method, int expectedPatches, final Predicate<MethodCall> p)
-      throws NotFoundException, BadBytecode, CannotCompileException {
-    String fqMethodName = String.format(
-      "%s.%s", method.getDeclaringClass().getName(), method.getName());
-
-    logger.log(INFO, String.format(
-      "Stripping PVP check from %s", fqMethodName));
-
-    final WasPatchedCheck check = new WasPatchedCheck();
-
-    method.instrument(new ExprEditor() {
-      @Override
-      public void edit(MethodCall m) throws CannotCompileException {
+      throws NotFoundException, CannotCompileException {
+    patchExpressions(
+      method,
+      "Stripping PVP check from %s",
+      "Successfully stripped PVP check from %s",
+      expectedPatches,
+      (m, check) -> {
         if (p.test(m)) {
           // Replace call to Servers.isThisAPvpServer with literal false
           m.replace("$_ = false;");
@@ -78,24 +73,14 @@ public class BrandMod extends BaseMod implements WurmServerMod, PreInitable {
           check.didPatch();
         }
       }
-    });
-
-    int patchCount = check.getPatchCount();
-
-    if (patchCount != expectedPatches) {
-      throw new NotFoundException(String.format(
-        "Only %d patches were done, expected %d", patchCount, expectedPatches));
-    }
-
-    logger.log(INFO, String.format(
-      "Successfully stripped PVP check from %s", fqMethodName));
+    );
   }
 
   // Convenience method for when we are only expecting to match the given
   // predicate once in the method body.
   private void stripPvpCheck(
       CtMethod method, Predicate<MethodCall> p)
-      throws NotFoundException, BadBytecode, CannotCompileException {
+      throws NotFoundException, CannotCompileException {
     stripPvpCheck(method, 1, p);
   }
 
@@ -103,14 +88,14 @@ public class BrandMod extends BaseMod implements WurmServerMod, PreInitable {
   // expecting more than a single replacement.
   private void stripPvpCheck(
       CtMethod method, int expectedPatches)
-      throws NotFoundException, BadBytecode, CannotCompileException {
+      throws NotFoundException, CannotCompileException {
     stripPvpCheck(method, expectedPatches, DEFAULT_PREDICATE);
   }
 
   // Convenience method when we only need to perform a single replacement with
   // no special checking.
   private void stripPvpCheck(CtMethod method)
-      throws NotFoundException, BadBytecode, CannotCompileException {
+      throws NotFoundException, CannotCompileException {
     stripPvpCheck(method, 1, DEFAULT_PREDICATE);
   }
 
