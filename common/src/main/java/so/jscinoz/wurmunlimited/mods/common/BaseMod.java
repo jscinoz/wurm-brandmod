@@ -308,5 +308,10 @@ public abstract class BaseMod {
       public static final String getBehavioursFor = "getBehavioursFor";
       public static final String action = "action";
     }
+
+    public static final class Action {
+      public static final int SMELT = 519;
+      public static final int MANAGE_ANIMAL = 663;
+    }
   }
 }

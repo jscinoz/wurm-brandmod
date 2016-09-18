@@ -38,8 +38,6 @@ import static javassist.bytecode.Opcode.INVOKEVIRTUAL;
 import static javassist.bytecode.Opcode.SIPUSH;
 
 public class BrandMod extends BaseMod implements WurmServerMod, PreInitable {
-  private static final int MANAGE_ANIMAL_ACTION = 663;
-
   // Default test for replacing a MethodCall with ExprEditor - simply checks
   // that the target MethodCall is for Servers.isThisAPvpServer
   private static final Predicate<MethodCall> DEFAULT_PREDICATE = m -> {
@@ -139,7 +137,7 @@ public class BrandMod extends BaseMod implements WurmServerMod, PreInitable {
           if (op == SIPUSH) {
             int val = ci.s16bitAt(pos + 1);
 
-            if (val == MANAGE_ANIMAL_ACTION) {
+            if (val == Wurm.Action.MANAGE_ANIMAL) {
               // Found where the code for MANAGE_ANIMAL is pushed
               actionAddPos = pos;
 
@@ -200,7 +198,7 @@ public class BrandMod extends BaseMod implements WurmServerMod, PreInitable {
         if (op == LOOKUPSWITCH) {
           // Found a LOOKUPSWITCH, let's see if it contains a branch for case:
           // MANAGE_ANIMAL
-          int casePos = findPosForCase(ci, pos, MANAGE_ANIMAL_ACTION);
+          int casePos = findPosForCase(ci, pos, Wurm.Action.MANAGE_ANIMAL);
 
           if (casePos != -1) {
             // Found the where case for MANAGE_ANIMAL handled, let's just make
