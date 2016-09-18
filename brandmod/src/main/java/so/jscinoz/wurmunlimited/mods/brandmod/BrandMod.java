@@ -125,53 +125,40 @@ public class BrandMod extends BaseMod implements WurmServerMod, PreInitable {
     CtMethod targetMethod =
       targetClass.getDeclaredMethods("addVehicleOptions")[0];
 
-    final int targetPos = searchForInstruction(targetMethod, (ci, cp) -> {
-      int actionAddPos = -1;
-      int candidatePos = -1;
-
+    final int actionAddPos = searchForInstruction(targetMethod, (ci, cp) -> {
       while (ci.hasNext()) {
         int pos = ci.next();
         int op = ci.byteAt(pos);
 
-        if (actionAddPos == -1) {
-          if (op == SIPUSH) {
-            int val = ci.s16bitAt(pos + 1);
-
-            if (val == Wurm.Action.MANAGE_ANIMAL) {
-              // Found where the code for MANAGE_ANIMAL is pushed
-              actionAddPos = pos;
-
-              // Restart the iterator
-              ci.begin();
-            }
-          }
-        } else if (op == INVOKESTATIC) {
+        if (op == SIPUSH) {
           int val = ci.s16bitAt(pos + 1);
-          String methodName = cp.getMethodrefName(val);
 
-          if (methodName.equals(Wurm.Method.isThisAPvpServer)) {
-            if (pos < actionAddPos) {
-              if (actionAddPos - pos < actionAddPos - candidatePos) {
-                // We are before the actionAddPos, and closer to it than the
-                // last isThisAPvpServer call. Once we have reached
-                // actionAddPos, candidatePos will contain the position of the
-                // last isThisAPvpServer call before it (or -1 if not found0.
-                candidatePos = pos;
-              }
-            } else {
-              // We've reached / gone past actionAddPos, the instruction we're
-              // looking for isn't here.
-              break;
-            }
+          if (val == Wurm.Action.MANAGE_ANIMAL) {
+            // Found where the code for MANAGE_ANIMAL is pushed
+            return pos;
           }
         }
       }
 
-      if (candidatePos != -1) {
-        return candidatePos;
+      throw new NotFoundException("Could not find target instruction");
+    });
+
+
+    final int targetPos =
+    findNearestPreceding(targetMethod, actionAddPos, (ci, cp) -> {
+      int pos = ci.next();
+      int op = ci.byteAt(pos);
+
+      if (op == INVOKESTATIC) {
+        int val = ci.s16bitAt(pos + 1);
+        String methodName = cp.getMethodrefName(val);
+
+        if (methodName.equals(Wurm.Method.isThisAPvpServer)) {
+          return pos;
+        }
       }
 
-      throw new NotFoundException("Could not find target instruction");
+      return -1;
     });
 
     stripPvpCheck(

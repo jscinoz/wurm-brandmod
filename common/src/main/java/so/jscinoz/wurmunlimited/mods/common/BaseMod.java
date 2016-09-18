@@ -158,22 +158,14 @@ public abstract class BaseMod {
 
     int candidatePos = -1;
 
-    while (ci.hasNext()) {
+    while (ci.hasNext() && ci.lookAhead() < preceding) {
       try {
-        int pos = ci.lookAhead();
+        int matchPos = searcher.search(ci, cp);
 
-        if (pos < preceding) {
-          int matchPos = searcher.search(ci, cp);
-
-          if (preceding - matchPos < preceding - candidatePos) {
-            // We're closer than before and still before the instuction at
-            // 'preceding'
-            candidatePos = matchPos;
-          }
-        } else {
-          // We've reached / gone past preceding, the instruction we're
-          // looking for isn't here.
-          break;
+        if (preceding - matchPos < preceding - candidatePos) {
+          // We're closer than before and still before the instuction at
+          // 'preceding'
+          candidatePos = matchPos;
         }
       } catch (NotFoundException e) {
         break;
