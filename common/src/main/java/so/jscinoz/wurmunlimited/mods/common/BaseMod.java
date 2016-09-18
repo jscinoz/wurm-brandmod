@@ -387,6 +387,8 @@ public abstract class BaseMod {
 
       public static final String Item = "com.wurmonline.server.items.Item";
 
+      public static final String Action =
+        "com.wurmonline.server.behaviours.Action";
       public static final String ItemBehaviour =
         "com.wurmonline.server.behaviours.ItemBehaviour";
       public static final String CreatureBehaviour =
