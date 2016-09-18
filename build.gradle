@@ -22,6 +22,18 @@ subprojects  {
             version: "0.20"
   }
 
+  configurations {
+    modRuntime {
+      description = "Dependencies needed by mods at runtime that aren't provided"
+
+      // Include everything from the runtime config...
+      extendsFrom configurations.runtime
+
+      // ... except the mod launcher (& dependencies) itself
+      exclude group: "org.gotti.wurmunlimited"
+    }
+  }
+
   tasks.withType(JavaCompile) {
     options.compilerArgs <<
       "-Werror" <<
@@ -36,20 +48,6 @@ subprojects  {
   group = "so.jscinoz.wurmunlimited.mods"
   version = "0.0.1"
 
-  task dist(type: Zip) {
-    dependsOn "jar"
-
-    into(project.name) {
-      from {
-        file jar.archivePath
-      }
-    }
-
-    from {
-      file "${project.projectDir}/src/${project.name}.properties"
-    }
-  }
-
   jar {
     version = null
 
@@ -57,6 +55,41 @@ subprojects  {
       attributes(
         "Implementation-Version": project.version
       )
+    }
+  }
+}
+
+def modProjects = subprojects - project(":common");
+
+configure(modProjects) {
+  def commonProject = project(":common");
+
+  dependencies {
+    compile commonProject
+  }
+
+  task dist(type: Zip) {
+    dependsOn "jar"
+
+    final modDir = project.name;
+
+    into(modDir) {
+      from configurations.modRuntime
+      from jar.archivePath
+    }
+
+    final modClassPath = (
+      // Everything in the common directory (the common.jar itself and any deps)
+      configurations.modRuntime.collect { it.name } +
+      // Our own jar
+      jar.archiveName
+    ).join(",")
+
+    from ("${project.projectDir}/src") {
+      include "${project.name}.properties"
+
+      // Build the proper classpath entry for the mod
+      expand(modClassPath: modClassPath)
     }
   }
 }
