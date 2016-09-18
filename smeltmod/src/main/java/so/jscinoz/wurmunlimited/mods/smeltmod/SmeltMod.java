@@ -39,16 +39,84 @@ public class SmeltMod extends BaseMod implements WurmServerMod, PreInitable {
   }
 
   private final MethodPatcher patchAction = targetMethod -> {
-    targetMethod.instrument(new ExprEditor() {
-      @Override
-      public void edit(MethodCall m) throws CannotCompileException {
-        if (m.getMethodName().equals("isIndestructible")) {
-          System.err.println("1: got isIndestructible");
+    patchExpressions(
+      targetMethod,
+      "Patching isMetal and isIndestructible checks from %s",
+      "Successfully patched isMetal and isIndestructible checks from %s",
+      2,
+      (m, check) -> {
+        String methodName = m.getMethodName();
+        int methodPos  = m.indexOfBytecode();
 
-          m.replace("$_ = $0.isKey() || $0.isLock() ? false : $proceed($$);");
+        if (methodName.equals(Wurm.Method.isIndestructible) ||
+            methodName.equals(Wurm.Method.isMetal)) {
+          int actionAddPos = searchForInstruction(targetMethod, (ci, cp) -> {
+            while (ci.hasNext()) {
+              int pos = ci.next();
+              int op = ci.byteAt(pos);
+
+              if (op == SIPUSH) {
+                int val = ci.s16bitAt(pos + 1);
+
+                if (val == Wurm.Action.SMELT) {
+                  // Found where the code for MANAGE_ANIMAL is pushed
+                  return pos;
+                }
+              }
+            }
+            throw new NotFoundException("Could not find target instruction");
+          });
+
+          if (methodName.equals(Wurm.Method.isIndestructible)) {
+            int targetPos = findNearestFollowing(
+              targetMethod, actionAddPos, (ci, cp) -> {
+                int pos = ci.next();
+                int op = ci.byteAt(pos);
+
+                if (op == INVOKEVIRTUAL) {
+                  int val = ci.s16bitAt(pos + 1);
+                  String methodrefName = cp.getMethodrefName(val);
+
+                  if (methodrefName.equals(Wurm.Method.isIndestructible)) {
+                    return pos;
+                  }
+                }
+
+                return -1;
+              }
+            );
+
+            if (methodPos == targetPos) {
+              m.replace(REPLACEMENT_IS_INDESTRUCTIBLE);
+              check.didPatch();
+            }
+          } else if (methodName.equals(Wurm.Method.isMetal)) {
+            int targetPos = findNearestFollowing(
+              targetMethod, actionAddPos, (ci, cp) -> {
+                int pos = ci.next();
+                int op = ci.byteAt(pos);
+
+                if (op == INVOKEVIRTUAL) {
+                  int val = ci.s16bitAt(pos + 1);
+                  String methodrefName = cp.getMethodrefName(val);
+
+                  if (methodrefName.equals(Wurm.Method.isMetal)) {
+                    return pos;
+                  }
+                }
+
+                return -1;
+              }
+            );
+
+            if (methodPos == targetPos) {
+              m.replace(REPLACEMENT_IS_METAL);
+              check.didPatch();
+            }
+          }
         }
       }
-    });
+    );
   };
 
   private final MethodPatcher patchGetBehavioursFor = targetMethod -> {
@@ -65,8 +133,6 @@ public class SmeltMod extends BaseMod implements WurmServerMod, PreInitable {
 
         if (methodName.equals(Wurm.Method.isIndestructible) ||
             methodName.equals(Wurm.Method.isMetal)) {
-          System.err.println(String.format("%s at %d", m.getMethodName(), methodPos));
-
           final int actionAddPos =
           searchForInstruction(targetMethod, (ci, cp) -> {
             int candidatePos = -1;
@@ -88,8 +154,6 @@ public class SmeltMod extends BaseMod implements WurmServerMod, PreInitable {
             throw new NotFoundException("Could not find target instruction");
           });
 
-          System.err.println("519 is pushed at " + actionAddPos);
-
           if (methodName.equals(Wurm.Method.isIndestructible)) {
             final int targetPos =
             findNearestPreceding(targetMethod, actionAddPos, (ci, cp) -> {
@@ -107,8 +171,6 @@ public class SmeltMod extends BaseMod implements WurmServerMod, PreInitable {
 
               return -1;
             });
-
-            System.err.println("isI " + targetPos);
 
             if (methodPos == targetPos) {
               m.replace(REPLACEMENT_IS_INDESTRUCTIBLE);
@@ -132,8 +194,6 @@ public class SmeltMod extends BaseMod implements WurmServerMod, PreInitable {
               return -1;
             });
 
-            System.err.println("isM " + targetPos);
-
             if (methodPos == targetPos) {
               m.replace(REPLACEMENT_IS_METAL);
               check.didPatch();
@@ -149,10 +209,9 @@ public class SmeltMod extends BaseMod implements WurmServerMod, PreInitable {
   private final ClassPatcher patchItemBehaviour = targetClass -> {
     ClassPool pool = targetClass.getClassPool();
 
-    /*
     patchMethod(
       targetClass.getDeclaredMethod(Wurm.Method.action, new CtClass[] {
-        pool.get("com.wurmonline.server.behaviours.Action"),
+        pool.get(Wurm.Class.Action),
         pool.get(Wurm.Class.Creature),
         pool.get(Wurm.Class.Item),
         pool.get(Wurm.Class.Item),
@@ -161,7 +220,6 @@ public class SmeltMod extends BaseMod implements WurmServerMod, PreInitable {
       }),
       patchAction
     );
-    */
 
     patchMethod(
       targetClass.getDeclaredMethod(Wurm.Method.getBehavioursFor, new CtClass[] {
