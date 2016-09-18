@@ -353,6 +353,9 @@ public abstract class BaseMod {
       public static final String getManagedAnimalsFor = "getManagedAnimalsFor";
       public static final String getBehavioursFor = "getBehavioursFor";
       public static final String action = "action";
+
+      public static final String isMetal = "isMetal";
+      public static final String isIndestructible = "isIndestructible";
     }
 
     public static final class Action {
