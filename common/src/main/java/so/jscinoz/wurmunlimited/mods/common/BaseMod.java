@@ -181,6 +181,32 @@ public abstract class BaseMod {
     throw new NotFoundException("Could not find target instruction");
   }
 
+  protected static int findNearestFollowing(
+      CtMethod method, int following, Searcher searcher)
+      throws NotFoundException, BadBytecode {
+    MethodInfo mi = method.getMethodInfo();
+    ConstPool cp = mi.getConstPool();
+    CodeAttribute ca = mi.getCodeAttribute();
+    CodeIterator ci = ca.iterator();
+
+    ci.move(following);
+
+    while (ci.hasNext()) {
+      try {
+        int matchPos = searcher.search(ci, cp);
+
+        if (matchPos != -1) {
+          return matchPos;
+        }
+      } catch (NotFoundException e) {
+        break;
+      }
+    }
+
+    throw new NotFoundException("Could not find target instruction");
+  }
+
+
   // Finds the instruction pointed to by a LOOKUPSWITCH for the given value.
   // switchIndex is assumed to be the index of the first byte of a LOOKUPSWITCH
   // instruction. Does not mutate the passed CodeIterator
@@ -287,7 +313,12 @@ public abstract class BaseMod {
     method.instrument(new ExprEditor() {
       @Override
       public void edit(MethodCall m) throws CannotCompileException {
-        patcher.patch(m, check);
+        try {
+          patcher.patch(m, check);
+        } catch (BadBytecode | NotFoundException e) {
+          e.printStackTrace();
+          throw new CannotCompileException(e);
+        }
       }
     });
 
@@ -342,7 +373,7 @@ public abstract class BaseMod {
   @FunctionalInterface
   protected static interface ExpressionPatcher {
     public void patch(MethodCall m, WasPatchedCheck check)
-        throws CannotCompileException;
+        throws BadBytecode, NotFoundException, CannotCompileException;
   }
 
   // Convenience alias

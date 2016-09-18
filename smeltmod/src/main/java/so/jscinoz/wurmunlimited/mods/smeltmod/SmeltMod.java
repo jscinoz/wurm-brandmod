@@ -52,66 +52,6 @@ public class SmeltMod extends BaseMod implements WurmServerMod, PreInitable {
   };
 
   private final MethodPatcher patchGetBehavioursFor = targetMethod -> {
-    final int actionAddPos = searchForInstruction(targetMethod, (ci, cp) -> {
-      int candidatePos = -1;
-
-      while (ci.hasNext()) {
-        int pos = ci.next();
-        int op = ci.byteAt(pos);
-
-        if (op == SIPUSH) {
-          int val = ci.s16bitAt(pos + 1);
-
-          if (val == Wurm.Action.SMELT) {
-            // Found where the code for SMELT is pushed
-            return pos;
-          }
-        }
-      }
-
-      throw new NotFoundException("Could not find target instruction");
-    });
-
-    System.err.println("519 is pushed at " + actionAddPos + " (should be 4952)");
-
-    final int isIndestructibleTargetPos =
-    findNearestPreceding(targetMethod, actionAddPos, (ci, cp) -> {
-      int pos = ci.next();
-      int op = ci.byteAt(pos);
-
-      if (op == INVOKEVIRTUAL) {
-        int val = ci.s16bitAt(pos + 1);
-        String methodName = cp.getMethodrefName(val);
-
-        if (methodName.equals(Wurm.Method.isIndestructible)) {
-          return pos;
-        }
-      }
-
-      return -1;
-    });
-
-    System.err.println("isI " + isIndestructibleTargetPos);
-
-    final int isMetalTargetPos =
-    findNearestPreceding(targetMethod, actionAddPos, (ci, cp) -> {
-      int pos = ci.next();
-      int op = ci.byteAt(pos);
-
-      if (op == INVOKEVIRTUAL) {
-        int val = ci.s16bitAt(pos + 1);
-        String methodName = cp.getMethodrefName(val);
-
-        if (methodName.equals(Wurm.Method.isMetal)) {
-          return pos;
-        }
-      }
-
-      return -1;
-    });
-
-    System.err.println("isM " + isMetalTargetPos);
-
     patchExpressions(
       targetMethod,
       "Patching isMetal and isIndestructible checks from %s",
@@ -119,16 +59,86 @@ public class SmeltMod extends BaseMod implements WurmServerMod, PreInitable {
       2,
       (m, check) -> {
         int o = check.getPatchCount();
-        int methodPos = m.indexOfBytecode() - (o * 8);
+        int methodPos = m.indexOfBytecode();
 
-        if (m.getMethodName().equals(Wurm.Method.isIndestructible) &&
-            methodPos == isIndestructibleTargetPos) {
-          m.replace(REPLACEMENT_IS_INDESTRUCTIBLE);
-          check.didPatch();
-        } else if (m.getMethodName().equals(Wurm.Method.isMetal) &&
-                   methodPos == isMetalTargetPos) {
-          m.replace(REPLACEMENT_IS_METAL);
-          check.didPatch();
+        String methodName = m.getMethodName();
+
+        if (methodName.equals(Wurm.Method.isIndestructible) ||
+            methodName.equals(Wurm.Method.isMetal)) {
+          System.err.println(String.format("%s at %d", m.getMethodName(), methodPos));
+
+          final int actionAddPos =
+          searchForInstruction(targetMethod, (ci, cp) -> {
+            int candidatePos = -1;
+
+            while (ci.hasNext()) {
+              int pos = ci.next();
+              int op = ci.byteAt(pos);
+
+              if (op == SIPUSH) {
+                int val = ci.s16bitAt(pos + 1);
+
+                if (val == Wurm.Action.SMELT) {
+                  // Found where the code for SMELT is pushed
+                  return pos;
+                }
+              }
+            }
+
+            throw new NotFoundException("Could not find target instruction");
+          });
+
+          System.err.println("519 is pushed at " + actionAddPos);
+
+          if (methodName.equals(Wurm.Method.isIndestructible)) {
+            final int targetPos =
+            findNearestPreceding(targetMethod, actionAddPos, (ci, cp) -> {
+              int pos = ci.next();
+              int op = ci.byteAt(pos);
+
+              if (op == INVOKEVIRTUAL) {
+                int val = ci.s16bitAt(pos + 1);
+                String methodrefName = cp.getMethodrefName(val);
+
+                if (methodrefName.equals(Wurm.Method.isIndestructible)) {
+                  return pos;
+                }
+              }
+
+              return -1;
+            });
+
+            System.err.println("isI " + targetPos);
+
+            if (methodPos == targetPos) {
+              m.replace(REPLACEMENT_IS_INDESTRUCTIBLE);
+              check.didPatch();
+            }
+          } else if (methodName.equals(Wurm.Method.isMetal)) {
+            final int targetPos =
+            findNearestPreceding(targetMethod, actionAddPos, (ci, cp) -> {
+              int pos = ci.next();
+              int op = ci.byteAt(pos);
+
+              if (op == INVOKEVIRTUAL) {
+                int val = ci.s16bitAt(pos + 1);
+                String methodrefName = cp.getMethodrefName(val);
+
+                if (methodrefName.equals(Wurm.Method.isMetal)) {
+                  return pos;
+                }
+              }
+
+              return -1;
+            });
+
+            System.err.println("isM " + targetPos);
+
+            if (methodPos == targetPos) {
+              m.replace(REPLACEMENT_IS_METAL);
+              check.didPatch();
+            }
+          }
         }
       }
     );
