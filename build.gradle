@@ -1,5 +1,10 @@
 defaultTasks "dist"
 
+allprojects {
+  group = "so.jscinoz.wurmunlimited.mods"
+  version = "0.1.0"
+}
+
 subprojects  {
   apply plugin: "java"
 
@@ -45,9 +50,6 @@ subprojects  {
       "-Xdiags:verbose"
   }
 
-  group = "so.jscinoz.wurmunlimited.mods"
-  version = "0.1.0"
-
   jar {
     version = null
 
@@ -90,6 +92,22 @@ configure(modProjects) {
 
       // Build the proper classpath entry for the mod
       expand(modClassPath: modClassPath)
+    }
+  }
+}
+
+// Root disk task
+task dist(type: Zip) {
+  destinationDir = file("${project.buildDir}/distributions");
+  baseName = "jscinoz-${project.name}-${project.version}"
+
+  modProjects.each { modProject ->
+    dependsOn modProject.dist
+
+    println(modProject.dist.archivePath)
+
+    from (zipTree(modProject.dist.archivePath)) {
+      include "**"
     }
   }
 }
