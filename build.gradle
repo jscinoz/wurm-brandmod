@@ -104,8 +104,6 @@ task dist(type: Zip) {
   modProjects.each { modProject ->
     dependsOn modProject.dist
 
-    println(modProject.dist.archivePath)
-
     from (zipTree(modProject.dist.archivePath)) {
       include "**"
     }
