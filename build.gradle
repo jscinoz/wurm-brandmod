@@ -61,37 +61,36 @@ subprojects  {
   }
 }
 
-def modProjects = subprojects - project(":common");
+final commonProject = project(":common");
+final modProjects = subprojects - commonProject;
 
 configure(modProjects) {
-  def commonProject = project(":common");
-
   dependencies {
     compile commonProject
   }
 
-  task dist(type: Zip) {
-    dependsOn "jar"
+  afterEvaluate {
+    task dist(type: Zip) {
+      dependsOn "jar"
 
-    final modDir = project.name;
+      final modDir = project.name;
 
-    into(modDir) {
-      from configurations.modRuntime
-      from jar.archivePath
-    }
+      into(modDir) {
+        from configurations.modRuntime
+        from jar.archivePath
+      }
 
-    final modClassPath = (
-      // Everything in the common directory (the common.jar itself and any deps)
-      configurations.modRuntime.collect { it.name } +
-      // Our own jar
-      jar.archiveName
-    ).join(",")
+      from("${project.projectDir}/src/${project.name}.properties") {
+        final modClassPath = (
+          // Everything in the common directory (the common.jar itself and any deps)
+          configurations.modRuntime.collect { it.name } +
+          // Our own jar
+          jar.archiveName
+        ).join(",")
 
-    from ("${project.projectDir}/src") {
-      include "${project.name}.properties"
-
-      // Build the proper classpath entry for the mod
-      expand(modClassPath: modClassPath)
+        // Build the proper classpath entry for the mod
+        expand(modClassPath: modClassPath)
+      }
     }
   }
 }
@@ -102,11 +101,11 @@ task dist(type: Zip) {
   baseName = "jscinoz-${project.name}-${project.version}"
 
   modProjects.each { modProject ->
-    dependsOn modProject.dist
+    def (distTask) = modProject.getTasksByName("dist", false);
 
-    println(modProject.dist.archivePath)
+    dependsOn distTask
 
-    from (zipTree(modProject.dist.archivePath)) {
+    from (zipTree(distTask.archivePath)) {
       include "**"
     }
   }
